@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply font-sans text-zinc-900;
+}
+
+.card {
+  @apply bg-panel rounded-2xl shadow-panel border border-zinc-100;
+}
+
+.card-pad {
+  @apply p-6 md:p-8;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 active:scale-[0.99] transition;
+}
+
+.input {
+  @apply rounded-xl border border-zinc-300 px-3 py-2 focus:outline-none focus:ring-4 focus:ring-zinc-200;
+}
+
+.label {
+  @apply text-sm text-zinc-600;
+}
