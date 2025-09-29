@@ -1,5 +1,5 @@
 import pytest
-from app import app  # tests live in backend/, so import directly
+from backend.app import app  # tests live in backend/, so import directly
 
 @pytest.mark.asyncio
 async def test_health_ok():

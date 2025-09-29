@@ -1,10 +1,18 @@
-from app import BernoulliBanditEnv, GaussianBanditEnv, make_env
+from backend.app import BernoulliBanditEnv, GaussianBanditEnv, make_env
+
+# test bandit environment classes
 
 def test_make_env_types():
+    """
+    Test returned instance by make_env
+    """
     assert isinstance(make_env("bernoulli", 2, 0), BernoulliBanditEnv)
     assert isinstance(make_env("gaussian", 2, 0), GaussianBanditEnv)
 
 def test_bernoulli_env_step_and_info():
+    """
+    Test BernoulliBandit value range and meta data
+    """
     env = BernoulliBanditEnv(n_actions=4, seed=42)
     # p list is created in reset()
     assert len(env.p) == 4
@@ -16,6 +24,9 @@ def test_bernoulli_env_step_and_info():
     assert info["n_actions"] == 4
 
 def test_gaussian_env_step_and_info():
+    """
+    Test GaussianBandit value range and meta data
+    """
     env = GaussianBanditEnv(n_actions=3, seed=42)
     vals = [env.step(2) for _ in range(10)]
     assert all(isinstance(v, float) for v in vals)

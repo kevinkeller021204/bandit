@@ -1,5 +1,5 @@
 import math
-from app import Greedy, EpsilonGreedy, UCB1, ThompsonSampling, GradientBandit
+from backend.app import Greedy, EpsilonGreedy, UCB1, ThompsonSampling, GradientBandit
 
 def test_greedy_update_and_select():
     algo = Greedy(3, seed=0)

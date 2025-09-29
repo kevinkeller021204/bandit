@@ -236,17 +236,25 @@ class GradientBandit(AlgorithmBase):
         return self.n_actions - 1
 
     def update(self, action: int, reward: float) -> None:
-        self.time += 1
-        self.average_reward += (reward - self.average_reward) / self.time
+        # probs from current preferences (softmax; numerically stable)
         max_pref = max(self.preferences)
         exp_prefs = [math.exp(p - max_pref) for p in self.preferences]
         total = sum(exp_prefs)
         probs = [v / total for v in exp_prefs]
+
+        # use OLD baseline for the gradient step
+        advantage = reward - self.average_reward
+
         for i in range(self.n_actions):
             if i == action:
-                self.preferences[i] += self.alpha * (reward - self.average_reward) * (1 - probs[i])
+                self.preferences[i] += self.alpha * advantage * (1 - probs[i])
             else:
-                self.preferences[i] -= self.alpha * (reward - self.average_reward) * probs[i]
+                self.preferences[i] -= self.alpha * advantage * probs[i]
+
+        # now update the baseline (incremental mean)
+        self.time += 1
+        self.average_reward += (reward - self.average_reward) / self.time
+
 
 ALGOS = {
     "greedy": Greedy,
