@@ -79,26 +79,27 @@ class BernoulliBanditEnv(BanditEnvBase):
 
 
 class GaussianBanditEnv(BanditEnvBase):
-    #simple working
-    
     def reset(self) -> None:
+        #random Mittelwerte zwischen -1 und 1
         self.means = [self._rng.uniform(-1.0, 1.0) for _ in range(self.n_actions)]
-        self.stds = [self._rng.uniform(0.1, 1.0) for _ in range(self.n_actions)]
+        #random Standardabweichungen zwischen 0.1 und 1.0
+        self.stds  = [self._rng.uniform(0.1, 1.0) for _ in range(self.n_actions)]
 
     def step(self, action: int) -> float:
         m = self.means[action]
         s = self.stds[action]
-        #box-muller for normal sample
-        u1 = self._rng.random() or 1e-9
-        u2 = self._rng.random()
-        z = ( (-2.0 * (u1)).__float__() ) ** 0.5 * (2.0 * 3.1415926535 * u2).__float__()
-        # Using a simple normal sample
-        return m + s * self._rng.gauss(0, 1)
+        #reward ~ Normalverteilung mit Mittelwert m und Standardabweichung s
+        return self._rng.gauss(m, s)
 
     def info(self) -> dict:
         base = super().info()
-        base.update({"type": "gaussian", "means": self.means, "stds": self.stds})
+        base.update({
+            "type": "gaussian",
+            "means": self.means,
+            "stds": self.stds
+        })
         return base
+
 
 
 # ----------------- Algorithms -------------------------- # 
@@ -178,9 +179,10 @@ class UCB1(AlgorithmBase):
             if self.counts[i] == 0:
                 return i
         ucb_values = [
-            self.q_values[i] + (2 * (self._rng.random() + 1)) * ((2 * math.log(self.total_steps) / self.counts[i]) ** 0.5)
+            self.q_values[i] + math.sqrt(2.0 * math.log(self.total_steps) / self.counts[i])
             for i in range(self.n_actions)
         ]
+
         max_ucb = max(ucb_values)
         candidates = [i for i, val in enumerate(ucb_values) if val == max_ucb]
         return self._rng.choice(candidates)
@@ -212,56 +214,13 @@ class ThompsonSampling(AlgorithmBase):
         else:
             self.failures[action] += 1
 
-class GradientBandit(AlgorithmBase):
-    name = "Gradient Bandit"
-
-    def __init__(self, n_actions: int, seed: Optional[int] = None, alpha: float = 0.1):
-        super().__init__(n_actions, seed)
-        self.preferences = [0.0] * n_actions
-        self.average_reward = 0.0
-        self.alpha = alpha
-        self.time = 0
-
-    def select_action(self) -> int:
-        max_pref = max(self.preferences)
-        exp_prefs = [math.exp(p - max_pref) for p in self.preferences]  # for numerical stability
-        total = sum(exp_prefs)
-        probs = [v / total for v in exp_prefs]
-        choice = self._rng.random()
-        cumulative = 0.0
-        for i, p in enumerate(probs):
-            cumulative += p
-            if choice < cumulative:
-                return i
-        return self.n_actions - 1
-
-    def update(self, action: int, reward: float) -> None:
-        # probs from current preferences (softmax; numerically stable)
-        max_pref = max(self.preferences)
-        exp_prefs = [math.exp(p - max_pref) for p in self.preferences]
-        total = sum(exp_prefs)
-        probs = [v / total for v in exp_prefs]
-
-        # use OLD baseline for the gradient step
-        advantage = reward - self.average_reward
-
-        for i in range(self.n_actions):
-            if i == action:
-                self.preferences[i] += self.alpha * advantage * (1 - probs[i])
-            else:
-                self.preferences[i] -= self.alpha * advantage * probs[i]
-
-        # now update the baseline (incremental mean)
-        self.time += 1
-        self.average_reward += (reward - self.average_reward) / self.time
 
 
 ALGOS = {
     "greedy": Greedy,
     "epsilon_greedy": EpsilonGreedy,
     "ucb1": UCB1,
-    "thompson": ThompsonSampling,
-    "gradient": GradientBandit,
+    "thompson": ThompsonSampling
 }
 
 # ----------------- API ----------------- #

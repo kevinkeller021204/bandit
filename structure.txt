@@ -1,0 +1,37 @@
+.
+├── backend
+│   ├── app.py
+│   ├── README.md
+│   ├── requirements.txt
+│   └── tests
+│       ├── test_algos.py
+│       ├── test_api.py
+│       └── test_envs.py
+├── frontend
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── README.md
+│   ├── src
+│   │   ├── api
+│   │   │   └── index.ts
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   ├── types
+│   │   │   └── index.ts
+│   │   └── ui
+│   │       ├── App.tsx
+│   │       ├── Controls.tsx
+│   │       └── Results.tsx
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── proxy
+│   ├── package-lock.json
+│   ├── package.json
+│   └── server.js
+├── README.md
+└── structure.txt
+
+9 directories, 26 files
