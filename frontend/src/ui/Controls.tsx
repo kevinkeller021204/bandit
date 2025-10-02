@@ -77,7 +77,7 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
       </div>
 
       <div className="text-xs text-zinc-500">
-        Minimum: Greedy, Epsilon‑Greedy. Advanced: UCB, Optimistic Init, Thompson, Gradient.
+        Hier ausklappbares Markdown für die Beschreibung der Algorithmen. Fragezeichen soll neben den algos.
       </div>
     </div>
   )
