@@ -56,13 +56,15 @@ jobs:
           pip install pyinstaller
           pyinstaller --onefile --name bandit-server app.py
 
-      # ---------- Bundle + checksum ----------
-      - name: Make bundle
+      # ---------- Bundle + checksum (OS-spezifisch) ----------
+      # Linux + macOS: zip/sha sind vorhanden
+      - name: Make bundle (unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p bundle/frontend_dist
-          cp backend/dist/*bandit-server* bundle/          # kopiert .exe/.bin je nach OS
+          cp backend/dist/*bandit-server* bundle/
           cp -R frontend/dist/* bundle/frontend_dist/
           cd bundle
           zip -r "../bandit-local-${{ matrix.os_tag }}.zip" .
@@ -73,17 +75,32 @@ jobs:
             sha256sum "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
           fi
 
-      # ---------- Release anlegen (falls nicht vorhanden) ----------
+      # Windows: nutze PowerShell Compress-Archive + CertUtil für SHA256
+      - name: Make bundle (windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle\frontend_dist | Out-Null
+          Copy-Item -Path backend\dist\*bandit-server* -Destination bundle\ -Force
+          Copy-Item -Path frontend\dist\* -Destination bundle\frontend_dist\ -Recurse -Force
+          if (Test-Path "bandit-local-${{ matrix.os_tag }}.zip") { Remove-Item "bandit-local-${{ matrix.os_tag }}.zip" -Force }
+          Compress-Archive -Path bundle\* -DestinationPath "bandit-local-${{ matrix.os_tag }}.zip" -Force
+          # SHA256 erzeugen im Format "<hash>  file"
+          $hashOut = (& CertUtil -hashfile "bandit-local-${{ matrix.os_tag }}.zip" SHA256) -join "`n"
+          $hash = ($hashOut -split "`n" | Where-Object { $_ -match '^[0-9A-F ]+$' } | ForEach-Object { $_ -replace ' ', '' })[0]
+          "$hash  bandit-local-${{ matrix.os_tag }}.zip" | Out-File -Encoding ascii "SHA256SUMS-${{ matrix.os_tag }}.txt"
+
+      # ---------- Release erstellen/aktualisieren + Assets hochladen ----------
       - name: Create or update release and upload assets
         uses: ncipollo/release-action@v1
         with:
-            tag:  ${{ github.ref_name }}
-            name: ${{ github.ref_name }}
-            allowUpdates: true                # 👈 erstellt ODER aktualisiert
-            omitBodyDuringUpdate: true
-            artifacts: |
-                bandit-local-${{ matrix.os_tag }}.zip
-                SHA256SUMS-${{ matrix.os_tag }}.txt
-                token: ${{ secrets.GITHUB_TOKEN }} # 👈 token explizit setzen
+          tag:  ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          artifacts: |
+            bandit-local-${{ matrix.os_tag }}.zip
+            SHA256SUMS-${{ matrix.os_tag }}.txt
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 
