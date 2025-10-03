@@ -238,8 +238,11 @@ class RunRequest(BaseModel):
     algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"])
     seed: Optional[int] = None
 
-#!!keep allow origin!!, needed for further proxy config for package
-app = cors(Quart(__name__), allow_origin="*")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIST_DIR = os.path.join(ROOT, "frontend_dist") 
+
+app = Quart(__name__, static_folder=DIST_DIR, static_url_path="/")
+app.config.setdefault("PROVIDE_AUTOMATIC_OPTIONS", True)
 
 
 def make_env(env_type: EnvType, n_actions: int, seed: Optional[int]) -> BanditEnvBase:
