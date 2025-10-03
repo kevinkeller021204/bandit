@@ -4,9 +4,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const NGROK_KEY = 'ngrok_authtoken';
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-
 import fetch from 'cross-fetch';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import child_process from 'node:child_process';
 import keytar from 'keytar';
 import open from 'open';
-import ngrok from 'ngrok';
+import ngrok from '@ngrok/ngrok';
 
 const OWNER = "kevinkeller021204";
 const REPO  = "bandit";
@@ -25,6 +25,10 @@ const APPDATA = app.getPath('userData');
 
 let win, serverProc, ngrokUrl;
 
+app.whenReady().then(() => {
+  // Beim Start nach Updates schauen & ggf. Notification anzeigen
+  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+});
 
 function createWindow() {
   const preloadPath = join(__dirname, 'preload.cjs');   // <— HIER definieren
@@ -230,34 +234,34 @@ ipcMain.on('host-offline', async ()=>{
   } catch (e) { err(e); }
 });
 
+function toUrlString(conn) {
+  // v1 SDK: Listener-Objekt hat meist .url() oder .url
+  if (typeof conn === 'string') return conn;
+  if (conn && typeof conn.url === 'function') return conn.url();
+  if (conn && typeof conn.url === 'string') return conn.url;
+  return String(conn); // Fallback (vermeiden, aber crasht nicht)
+}
+
 ipcMain.on('host-online', async () => {
   try {
     const dir = await ensureBundle();
     startServer(dir);
     await waitReady('http://127.0.0.1:5050');
 
-    // Token vom Keychain / Dialog holen (deine getNgrokToken-Funktion)
     const tok = await getNgrokToken();
-
     status('Starte ngrok …');
 
-    // Variante A (empfohlen): Token direkt im connect-Call mitgeben
-    const publicUrl = await ngrok.connect({
+    // je nach SDK: connect / forward
+    const conn = await ngrok.connect({
       addr: 5050,
       proto: 'http',
-      authtoken: tok,            // <— HIER: kein separater authtoken()-Call mehr!
-      // region: 'eu',           // optional
-      // domain / hostname …     // optional (bezahlte Pläne)
+      authtoken: tok,
+      // region: 'eu'
     });
 
-    emit('public-url', publicUrl);
-
-    // iFrame: entweder öffentlich…
-    emit('open-url', publicUrl);
-
-    // …oder lokal lassen und nur URL anzeigen:
-    // emit('open-url', 'http://127.0.0.1:5050');
-
+    const publicUrl = toUrlString(conn);
+    emit('public-url', publicUrl);     // z.B. Box mit Link
+    emit('open-url', publicUrl);       // iFrame lädt diese URL
     status('Online bereit.');
   } catch (e) {
     console.error('[ngrok]', e);
