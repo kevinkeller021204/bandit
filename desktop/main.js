@@ -23,11 +23,12 @@ let win, serverProc, ngrokUrl;
 
 
 function createWindow() {
+  console.log('Using preload at:', preloadPath); 
   win = new BrowserWindow({
     width: 1000,
     height: 760,
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false
     }
