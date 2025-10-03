@@ -272,7 +272,7 @@ class RunRequest(BaseModel):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_DIR = os.path.join(ROOT, "frontend_dist") 
 
-app = Quart(__name__)
+app = cors(Quart(__name__), allow_origin="*", allow_headers="*", allow_methods=["GET", "POST", "OPTIONS"])
 # (Optional) keep this for safety, but it’s no longer needed for init-time routing:
 app.config["PROVIDE_AUTOMATIC_OPTIONS"] = True
 
