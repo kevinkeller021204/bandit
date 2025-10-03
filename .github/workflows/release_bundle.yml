@@ -74,30 +74,16 @@ jobs:
           fi
 
       # ---------- Release anlegen (falls nicht vorhanden) ----------
-      - name: Find existing release by tag
-        id: findrel
-        uses: joutvhu/get-release@v1
+      - name: Create or update release and upload assets
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref_name }}
-        continue-on-error: true
+            tag:  ${{ github.ref_name }}
+            name: ${{ github.ref_name }}
+            allowUpdates: true                # 👈 erstellt ODER aktualisiert
+            omitBodyDuringUpdate: true
+            artifacts: |
+                bandit-local-${{ matrix.os_tag }}.zip
+                SHA256SUMS-${{ matrix.os_tag }}.txt
+                token: ${{ secrets.GITHUB_TOKEN }} # 👈 token explizit setzen
 
-      - name: Create release (if missing)
-        if: steps.findrel.outcome != 'success'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            bandit-local-${{ matrix.os_tag }}.zip
-            SHA256SUMS-${{ matrix.os_tag }}.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
