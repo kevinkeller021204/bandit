@@ -143,13 +143,13 @@ async function ensureBundle() {
     status("Entpacke …");
     unzip(zipPath, dir);
     try {
-  if (process.platform !== 'win32') {
-    await fs.promises.chmod(path.join(installDir, 'bandit-server'), 0o755);
-    // macOS: Quarantine-Flag entfernen 
+    if (process.platform !== 'win32') {
+    const bin = path.join(dir, 'bandit-server');
+    await fs.promises.chmod(bin, 0o755);
     if (process.platform === 'darwin') {
-      try { child_process.execSync(`xattr -dr com.apple.quarantine "${path.join(installDir, 'bandit-server')}"`); } catch {}
+        try { child_process.execSync(`xattr -dr com.apple.quarantine "${bin}"`); } catch {}
     }
-  }
+    }
 } catch {}
 
   }

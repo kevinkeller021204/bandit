@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from typing import List, Dict, Literal, Optional
 import math
+import sys
 from quart import Quart, jsonify, request, send_from_directory
 from quart_cors import cors
 from pydantic import BaseModel, Field, ValidationError
@@ -44,6 +45,9 @@ r'''
                           ".__""">G>-.__.-">       .--,_
                               ""  G'''
 
+
+BASE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE, "frontend_dist")
 
 class BanditEnvBase:
     #base class (bp)
@@ -254,14 +258,15 @@ def make_env(env_type: EnvType, n_actions: int, seed: Optional[int]) -> BanditEn
 
 frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 
-#this is for ngrok, will add doc
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
-async def serve_frontend(path):
-    file_path = os.path.join(frontend_dir, path)
-    if path != "" and os.path.exists(file_path):
-        return await send_from_directory(frontend_dir, path)
-    return await send_from_directory(frontend_dir, "index.html")
+async def serve_frontend(path: str):
+    if not os.path.isdir(FRONTEND_DIR):
+        return f"Frontend fehlt: {FRONTEND_DIR}", 500
+    full = os.path.join(FRONTEND_DIR, path)
+    if path and os.path.isfile(full):
+        return await send_from_directory(FRONTEND_DIR, path)
+    return await send_from_directory(FRONTEND_DIR, "index.html")
 
 @app.get("/api/health")
 async def health():
