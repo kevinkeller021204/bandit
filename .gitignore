@@ -13,3 +13,41 @@ proxy/dist/
 # Sonstiges
 .DS_Store
 .idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# node / frontend / desktop
+node_modules/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-lock.yaml # falls nicht genutzt
+desktop/dist/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# python / backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+backend/build/
+backend/dist/
+backend/*.spec
+.bandit/        # falls du mal temp nutzt
+
+# Editor/IDE
+.vscode/
+.idea/
+*.iml
+
+# Archives
+*.zip
+*.tar
+*.tar.gz

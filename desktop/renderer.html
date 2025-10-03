@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"><title>Bandit App</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui; padding: 20px; }
+      .row { display:flex; gap:12px; align-items:center; }
+      button { padding:10px 14px; border-radius:10px; border:0; background:#6d28d9; color:#fff; cursor:pointer; }
+      button.secondary { background:#475569; }
+      #status { margin-top:14px; color:#334155; }
+      .spinner { width:16px; height:16px; border:3px solid #cbd5e1; border-top-color:#6d28d9; border-radius:50%; animation:spin 1s linear infinite; display:none; }
+      .spin .spinner { display:inline-block; }
+      a { color:#2563eb; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .url { margin-top:10px; }
+      iframe { width:100%; height:70vh; border:1px solid #e5e7eb; border-radius:12px; margin-top:16px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <h2>Bandit App</h2>
+    <div class="row">
+      <button id="offline">Host offline</button>
+      <button id="online" class="secondary">Host online (ngrok)</button>
+      <div class="spinner" id="spin"></div>
+      <div id="device" style="margin-top:10px; padding:10px; background:#f1f5f9; border-radius:8px; display:none;">
+        <div><strong>GitHub Code:</strong> <span id="device-code" style="font-family:monospace;"></span></div>
+        <div style="margin-top:6px;">
+            1) <a href="https://github.com/login/device" target="_blank">github.com/login/device</a> öffnen<br>
+            2) Code oben eingeben und bestätigen
+        </div>
+        </div>
+
+    </div>
+    <div id="status"></div>
+    <div id="public-url" class="url"></div>
+    <iframe id="appframe" src="about:blank"></iframe>
+
+    <script>
+      const { ipcRenderer } = require('electron');
+      const spin = document.getElementById('spin');
+      const status = document.getElementById('status');
+      const urlBox = document.getElementById('public-url');
+      const frame = document.getElementById('appframe');
+      const deviceBox  = document.getElementById('device');
+      const deviceSpan = document.getElementById('device-code');
+
+        ipcRenderer.on('device-code', (_, code)=>{
+            deviceSpan.textContent = code;
+            deviceBox.style.display = 'block';
+        });
+
+        ipcRenderer.on('error',  (_, msg)=> { status.textContent = "Fehler: " + msg; });
+            function setSpin(on){ document.body.classList.toggle('spin', !!on); }
+
+      document.getElementById('offline').onclick = () => {
+        setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
+        ipcRenderer.send('host-offline');
+      };
+      document.getElementById('online').onclick = () => {
+        setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
+        ipcRenderer.send('host-online');
+      };
+
+      ipcRenderer.on('status', (_, msg)=> { status.textContent = msg; if (msg.includes("bereit")) setSpin(false); });
+      ipcRenderer.on('open-url', (_, url)=> { frame.src = url; setSpin(false); });
+      ipcRenderer.on('public-url', (_, url)=> { urlBox.innerHTML = `Öffentlich: <a href="${url}" target="_blank">${url}</a>`; });
+      ipcRenderer.on('error', (_, msg)=> { setSpin(false); status.textContent = "Fehler: " + msg; });
+    </script>
+  </body>
+</html>
