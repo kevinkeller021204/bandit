@@ -230,30 +230,38 @@ ipcMain.on('host-offline', async ()=>{
   } catch (e) { err(e); }
 });
 
-ipcMain.on('host-online', async ()=>{
+ipcMain.on('host-online', async () => {
   try {
     const dir = await ensureBundle();
     startServer(dir);
-    await waitReady("http://127.0.0.1:5050");
+    await waitReady('http://127.0.0.1:5050');
 
-    // Token sicherstellen
+    // Token vom Keychain / Dialog holen (deine getNgrokToken-Funktion)
     const tok = await getNgrokToken();
-    status("Starte ngrok …");
-    await ngrok.authtoken(tok);
 
-    // Tunnel direkt auf den lokalen Server (5050) legen
-    ngrokUrl = await ngrok.connect({ addr: 5050, proto: 'http' });
+    status('Starte ngrok …');
 
-    // UI informieren
-    emit('public-url', ngrokUrl);
+    // Variante A (empfohlen): Token direkt im connect-Call mitgeben
+    const publicUrl = await ngrok.connect({
+      addr: 5050,
+      proto: 'http',
+      authtoken: tok,            // <— HIER: kein separater authtoken()-Call mehr!
+      // region: 'eu',           // optional
+      // domain / hostname …     // optional (bezahlte Pläne)
+    });
 
-    // Option A: lokal im iFrame lassen (stabil) und nur die öffentliche URL anzeigen:
-    // emit('open-url', "http://127.0.0.1:5050");
+    emit('public-url', publicUrl);
 
-    // Option B: die öffentliche URL auch im iFrame laden:
-    emit('open-url', ngrokUrl);
+    // iFrame: entweder öffentlich…
+    emit('open-url', publicUrl);
 
-    status("Online bereit.");
-  } catch (e) { err(e); }
+    // …oder lokal lassen und nur URL anzeigen:
+    // emit('open-url', 'http://127.0.0.1:5050');
+
+    status('Online bereit.');
+  } catch (e) {
+    console.error('[ngrok]', e);
+    err(e);
+  }
 });
 
