@@ -4,7 +4,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const NGROK_KEY = 'ngrok_authtoken';
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import { autoUpdater } from 'electron-updater';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 import fetch from 'cross-fetch';
@@ -25,10 +24,7 @@ const APPDATA = app.getPath('userData');
 
 let win, serverProc, ngrokUrl;
 
-app.whenReady().then(() => {
-  // Beim Start nach Updates schauen & ggf. Notification anzeigen
-  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
-});
+
 
 function createWindow() {
   const preloadPath = join(__dirname, 'preload.cjs');   // <— HIER definieren
