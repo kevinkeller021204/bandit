@@ -51,12 +51,10 @@ jobs:
         working-directory: backend
         shell: bash
         run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          pip install --upgrade --force-reinstall --no-cache-dir -r requirements.txt
-          pip install --upgrade --no-cache-dir pyinstaller
-          python -c "import quart, werkzeug; print('QUART_VERSION=', quart.__version__); print('WERKZEUG_VERSION=', werkzeug.__version__)"
-          pyinstaller --onefile --name bandit-server app.py
+          python -c "import importlib.metadata as md; \
+          print('QUART_VERSION=', md.version('quart')); \
+          print('WERKZEUG_VERSION=', md.version('Werkzeug'))" || true
+
 
 
 
