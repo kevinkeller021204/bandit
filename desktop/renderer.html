@@ -32,6 +32,17 @@
         </div>
 
     </div>
+        <div id="ngrok-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.4);">
+    <div style="max-width:420px;margin:10% auto;background:#fff;border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);">
+        <div style="font-weight:600;margin-bottom:8px;">ngrok Authtoken</div>
+        <div style="font-size:12px;color:#555;margin-bottom:8px;">Füge deinen ngrok Authtoken ein. Er wird sicher gespeichert.</div>
+        <input id="ngrok-input" type="text" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;" placeholder="xxxxxxxxxxxxxxxxxxxxxx">
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="ngrok-cancel" class="btn">Abbrechen</button>
+        <button id="ngrok-save" class="btn">Speichern</button>
+        </div>
+    </div>
+    </div>
     <div id="status"></div>
     <div id="public-url" class="url"></div>
     <iframe id="appframe" src="about:blank"></iframe>
@@ -43,6 +54,39 @@
   const frame     = document.getElementById('appframe');
   const deviceBox = document.getElementById('device');
   const deviceSpan= document.getElementById('device-code');
+// Elemente
+  const modal = document.getElementById('ngrok-modal');
+  const ngrokInput = document.getElementById('ngrok-input');
+  const ngrokSave = document.getElementById('ngrok-save');
+  const ngrokCancel = document.getElementById('ngrok-cancel');
+
+// Main sagt: Token wird benötigt
+window.bandit.on('need-ngrok-token', () => {
+  ngrokInput.value = '';
+  modal.style.display = 'block';
+  ngrokInput.focus();
+});
+
+// Speichern -> an Main schicken
+ngrokSave.onclick = () => {
+  const val = ngrokInput.value.trim();
+  if (!val) { alert('Bitte Token eintragen'); return; }
+  modal.style.display = 'none';
+  window.bandit.send('set-ngrok-token', val);
+  // UI-Feedback
+  status.textContent = 'Token gespeichert. Starte ngrok …';
+};
+
+// Abbrechen
+ngrokCancel.onclick = () => {
+  modal.style.display = 'none';
+  status.textContent = 'ngrok abgebrochen.';
+};
+
+// Öffentliche URL anzeigen (z. B. unter deiner URL-Box)
+window.bandit.on('public-url', (url) => {
+  urlBox.innerHTML = `<a href="${url}" target="_blank" rel="noreferrer">${url}</a>`;
+});
 
   function setSpin(on){ document.body.classList.toggle('spin', !!on); }
 

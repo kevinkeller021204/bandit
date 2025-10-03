@@ -2,6 +2,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
+const NGROK_KEY = 'ngrok_authtoken';
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -79,6 +80,29 @@ async function getToken() {
     if (js.error && js.error !== "authorization_pending") throw new Error("OAuth: " + js.error);
   }
   await keytar.setPassword(GH_APP_NAME, 'github_token', tok);
+  return tok;
+}
+
+async function getNgrokToken() {
+  // erst aus Keychain
+  let tok = await keytar.getPassword(GH_APP_NAME, NGROK_KEY);
+  if (tok) return tok;
+
+  // Renderer soll UI zeigen und uns den Token schicken
+  status("Bitte ngrok Authtoken eingeben …");
+  emit('need-ngrok-token'); // Renderer zeigt Eingabefeld
+
+  tok = await new Promise((resolve, reject) => {
+    // einmalig auf Antwort warten
+    ipcMain.once('set-ngrok-token', async (_ev, val) => {
+      if (!val || !val.trim()) return reject(new Error("Kein Token eingegeben"));
+      await keytar.setPassword(GH_APP_NAME, NGROK_KEY, val.trim());
+      resolve(val.trim());
+    });
+    // optional Timeout:
+    setTimeout(() => reject(new Error("Token-Eingabe abgebrochen")), 120000);
+  });
+
   return tok;
 }
 
@@ -211,11 +235,25 @@ ipcMain.on('host-online', async ()=>{
     const dir = await ensureBundle();
     startServer(dir);
     await waitReady("http://127.0.0.1:5050");
+
+    // Token sicherstellen
+    const tok = await getNgrokToken();
     status("Starte ngrok …");
-    if (process.env.NGROK_AUTHTOKEN) await ngrok.authtoken(process.env.NGROK_AUTHTOKEN);
+    await ngrok.authtoken(tok);
+
+    // Tunnel direkt auf den lokalen Server (5050) legen
     ngrokUrl = await ngrok.connect({ addr: 5050, proto: 'http' });
+
+    // UI informieren
     emit('public-url', ngrokUrl);
+
+    // Option A: lokal im iFrame lassen (stabil) und nur die öffentliche URL anzeigen:
+    // emit('open-url', "http://127.0.0.1:5050");
+
+    // Option B: die öffentliche URL auch im iFrame laden:
+    emit('open-url', ngrokUrl);
+
     status("Online bereit.");
-    emit('open-url', "http://127.0.0.1:5050");
   } catch (e) { err(e); }
 });
+
