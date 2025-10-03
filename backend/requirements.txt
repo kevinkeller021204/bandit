@@ -1,6 +1,6 @@
 quart==0.19.6
 hypercorn==0.16.0
 quart-cors==0.7.0
-pydantic==2.7.4
+pydantic<2
 pytest==8.3.3
 pytest-asyncio==0.24.0
