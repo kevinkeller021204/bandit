@@ -9,42 +9,95 @@ permissions:
 
 jobs:
   build-bundle:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os_tag: linux
+            py_ver: "3.11"
+          - os: macos-latest
+            os_tag: macos
+            py_ver: "3.11"
+          - os: windows-latest
+            os_tag: windows
+            py_ver: "3.11"
 
-      # Frontend build
-      - uses: actions/setup-node@v4
-        with: { node-version: "20" }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ---------- Frontend build ----------
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Build frontend
         working-directory: frontend
         run: |
           npm ci
           npm run build
 
-      # Backend -> Single binary
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+      # ---------- Backend (PyInstaller) ----------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py_ver }}
+
       - name: Build backend binary
         working-directory: backend
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
           pyinstaller --onefile --name bandit-server app.py
-          # Binary: backend/dist/bandit-server
 
+      # ---------- Bundle + checksum ----------
       - name: Make bundle
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p bundle/frontend_dist
-          cp backend/dist/bandit-server bundle/
+          cp backend/dist/*bandit-server* bundle/          # kopiert .exe/.bin je nach OS
           cp -R frontend/dist/* bundle/frontend_dist/
-          cd bundle && zip -r ../bandit-local.zip . && cd ..
-          sha256sum bandit-local.zip > SHA256SUMS
+          cd bundle
+          zip -r "../bandit-local-${{ matrix.os_tag }}.zip" .
+          cd ..
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            shasum -a 256 "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
+          else
+            sha256sum "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
+          fi
 
-      - name: Create GitHub Release
+      # ---------- Release anlegen (falls nicht vorhanden) ----------
+      - name: Find existing release by tag
+        id: findrel
+        uses: joutvhu/get-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+        continue-on-error: true
+
+      - name: Create release (if missing)
+        if: steps.findrel.outcome != 'success'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
           files: |
-            bandit-local.zip
-            SHA256SUMS
+            bandit-local-${{ matrix.os_tag }}.zip
+            SHA256SUMS-${{ matrix.os_tag }}.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
