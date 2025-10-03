@@ -34,6 +34,7 @@ function createWindow() {
   });
 
   win.loadFile(join(__dirname, 'renderer.html'));
+  win.webContents.openDevTools();
   win.on('closed', () => { win = null; });
 }
 

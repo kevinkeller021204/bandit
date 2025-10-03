@@ -47,10 +47,15 @@
   function setSpin(on){ document.body.classList.toggle('spin', !!on); }
 
   // Button-Events
-  document.getElementById('offline').onclick = () => {
+    document.getElementById('offline').onclick = () => {
     setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
+    if (!window.bandit) {
+        status.textContent = "IPC-Bridge fehlt (Preload)";
+        return;
+    }
     window.bandit.send('host-offline');
-  };
+    };
+
 
   document.getElementById('online').onclick = () => {
     setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
