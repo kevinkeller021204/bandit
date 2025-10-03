@@ -84,13 +84,26 @@ async function latestRelease(token) {
   return await r.json();
 }
 
-async function dl(token, asset, outDir=APPDATA) {
+async function dl(token, asset, outDir = APPDATA) {
   const out = path.join(outDir, asset.name);
-  const r = await fetch(asset.browser_download_url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/octet-stream" }});
-  if (!r.ok) throw new Error("Download: " + r.status);
-  await fs.promises.writeFile(out, Buffer.from(await r.arrayBuffer()));
+  const r = await fetch(asset.url, {   // 👈 statt asset.browser_download_url → asset.url
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/octet-stream"  // 👈 zwingend für private Assets
+    },
+    redirect: "follow"
+  });
+
+  if (!r.ok) {
+    const txt = await r.text().catch(()=> "");
+    throw new Error("Download: " + r.status + " " + txt);
+  }
+
+  const buf = Buffer.from(await r.arrayBuffer());
+  await fs.promises.writeFile(out, buf);
   return out;
 }
+
 
 function sha256(p) { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
 function verify(zipPath, sumsPath) {
