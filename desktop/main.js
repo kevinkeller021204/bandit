@@ -26,19 +26,17 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1000,
     height: 760,
-    webPreferences: { nodeIntegration: true, contextIsolation: false }
+    webPreferences: {
+      preload: join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
   });
 
-  const htmlPath = join(__dirname, 'renderer.html');  // ✅ jetzt korrekt
-  win.loadFile(htmlPath).catch(err => {
-    console.error('loadFile failed:', err);
-  });
-
-  // optional: DevTools zum Debuggen beim ersten Start
-  // win.webContents.openDevTools({ mode: 'detach' });
-
+  win.loadFile(join(__dirname, 'renderer.html'));
   win.on('closed', () => { win = null; });
 }
+
 app.whenReady()
   .then(createWindow)
   .catch(err => console.error('app.whenReady failed:', err));
@@ -128,8 +126,14 @@ async function ensureBundle() {
   const dir = path.join(APPDATA, "bundles", tag);
 
   if (!fs.existsSync(dir) || !fs.existsSync(binPath(dir))) {
-    const zipAsset = rel.assets.find(a => a.name === "bandit-local.zip");
-    const sumAsset = rel.assets.find(a => a.name === "SHA256SUMS");
+    const { zipName, sumsName } = namesForPlatform(process.platform);
+    const zipAsset = rel.assets.find(a => a.name === zipName);
+    const sumAsset = rel.assets.find(a => a.name === sumsName);
+
+    if (!zipAsset || !sumAsset) {
+    console.log("Available assets:", rel.assets.map(a => a.name));
+    throw new Error(`Release-Assets fehlen: ${zipName} / ${sumsName}`);
+    }
     if (!zipAsset || !sumAsset) throw new Error("Release Assets fehlen");
     status("Lade Release …");
     const zipPath = await dl(token, zipAsset);
@@ -138,9 +142,26 @@ async function ensureBundle() {
     verify(zipPath, sumPath);
     status("Entpacke …");
     unzip(zipPath, dir);
+    try {
+  if (process.platform !== 'win32') {
+    await fs.promises.chmod(path.join(installDir, 'bandit-server'), 0o755);
+    // macOS: Quarantine-Flag entfernen 
+    if (process.platform === 'darwin') {
+      try { child_process.execSync(`xattr -dr com.apple.quarantine "${path.join(installDir, 'bandit-server')}"`); } catch {}
+    }
+  }
+} catch {}
+
   }
   return dir;
 }
+
+function namesForPlatform(platform){
+  if (platform === 'darwin')  return { zipName: 'bandit-local-macos.zip',   sumsName: 'SHA256SUMS-macos.txt' };
+  if (platform === 'win32')   return { zipName: 'bandit-local-windows.zip', sumsName: 'SHA256SUMS-windows.txt' };
+  return { zipName: 'bandit-local-linux.zip',  sumsName: 'SHA256SUMS-linux.txt' };
+}
+
 
 function stopServer() {
   if (serverProc && !serverProc.killed) serverProc.kill();
