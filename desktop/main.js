@@ -3,6 +3,9 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 import fetch from 'cross-fetch';
 import path from 'node:path';
 import fs from 'node:fs';
