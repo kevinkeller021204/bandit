@@ -23,12 +23,14 @@ let win, serverProc, ngrokUrl;
 
 
 function createWindow() {
-  console.log('Using preload at:', preloadPath); 
+  const preloadPath = join(__dirname, 'preload.cjs');   // <— HIER definieren
+  console.log('Using preload at:', preloadPath);
+
   win = new BrowserWindow({
     width: 1000,
     height: 760,
     webPreferences: {
-      preload: join(__dirname, 'preload.cjs'),
+      preload: preloadPath,          // <— und HIER verwenden
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -38,6 +40,7 @@ function createWindow() {
   win.webContents.openDevTools();
   win.on('closed', () => { win = null; });
 }
+
 
 app.whenReady()
   .then(createWindow)
