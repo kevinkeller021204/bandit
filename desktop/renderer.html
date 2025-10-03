@@ -36,36 +36,52 @@
     <div id="public-url" class="url"></div>
     <iframe id="appframe" src="about:blank"></iframe>
 
-    <script>
-      const { ipcRenderer } = require('electron');
-      const spin = document.getElementById('spin');
-      const status = document.getElementById('status');
-      const urlBox = document.getElementById('public-url');
-      const frame = document.getElementById('appframe');
-      const deviceBox  = document.getElementById('device');
-      const deviceSpan = document.getElementById('device-code');
+<script>
+  const spin      = document.getElementById('spin');
+  const status    = document.getElementById('status');
+  const urlBox    = document.getElementById('public-url');
+  const frame     = document.getElementById('appframe');
+  const deviceBox = document.getElementById('device');
+  const deviceSpan= document.getElementById('device-code');
 
-        ipcRenderer.on('device-code', (_, code)=>{
-            deviceSpan.textContent = code;
-            deviceBox.style.display = 'block';
-        });
+  function setSpin(on){ document.body.classList.toggle('spin', !!on); }
 
-        ipcRenderer.on('error',  (_, msg)=> { status.textContent = "Fehler: " + msg; });
-            function setSpin(on){ document.body.classList.toggle('spin', !!on); }
+  // Button-Events
+  document.getElementById('offline').onclick = () => {
+    setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
+    window.bandit.send('host-offline');
+  };
 
-      document.getElementById('offline').onclick = () => {
-        setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
-        ipcRenderer.send('host-offline');
-      };
-      document.getElementById('online').onclick = () => {
-        setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
-        ipcRenderer.send('host-online');
-      };
+  document.getElementById('online').onclick = () => {
+    setSpin(true); urlBox.innerHTML = ""; frame.src = "about:blank";
+    window.bandit.send('host-online');
+  };
 
-      ipcRenderer.on('status', (_, msg)=> { status.textContent = msg; if (msg.includes("bereit")) setSpin(false); });
-      ipcRenderer.on('open-url', (_, url)=> { frame.src = url; setSpin(false); });
-      ipcRenderer.on('public-url', (_, url)=> { urlBox.innerHTML = `Öffentlich: <a href="${url}" target="_blank">${url}</a>`; });
-      ipcRenderer.on('error', (_, msg)=> { setSpin(false); status.textContent = "Fehler: " + msg; });
-    </script>
+  // IPC-Empfänger
+  window.bandit.on('device-code', (code)=>{
+    deviceSpan.textContent = code;
+    deviceBox.style.display = 'block';
+  });
+
+  window.bandit.on('status', (msg)=> {
+    status.textContent = msg;
+    if (msg.toLowerCase().includes("bereit")) setSpin(false);
+  });
+
+  window.bandit.on('open-url', (url)=> {
+    frame.src = url;
+    setSpin(false);
+  });
+
+  window.bandit.on('public-url', (url)=> {
+    urlBox.innerHTML = `Öffentlich: <a href="${url}" target="_blank">${url}</a>`;
+  });
+
+  window.bandit.on('error', (msg)=> {
+    setSpin(false);
+    status.textContent = "Fehler: " + msg;
+  });
+</script>
+
   </body>
 </html>
