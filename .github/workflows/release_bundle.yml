@@ -40,7 +40,6 @@ jobs:
         run: |
           npm ci
           npm run build
-
       # ---------- Backend (PyInstaller) ----------
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -51,14 +50,10 @@ jobs:
         working-directory: backend
         shell: bash
         run: |
-          python -c "import importlib.metadata as md; \
-          print('QUART_VERSION=', md.version('quart')); \
-          print('WERKZEUG_VERSION=', md.version('Werkzeug'))" || true
-
-
-
-
-
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pyinstaller --onefile --name bandit-server app.py
       # ---------- Bundle + checksum (OS-spezifisch) ----------
       # Linux + macOS: zip/sha sind vorhanden
       - name: Make bundle (unix)
@@ -77,7 +72,6 @@ jobs:
           else
             sha256sum "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
           fi
-
       # Windows: nutze PowerShell Compress-Archive + CertUtil für SHA256
       - name: Make bundle (windows)
         if: runner.os == 'Windows'
@@ -92,7 +86,6 @@ jobs:
           $hashOut = (& CertUtil -hashfile "bandit-local-${{ matrix.os_tag }}.zip" SHA256) -join "`n"
           $hash = ($hashOut -split "`n" | Where-Object { $_ -match '^[0-9A-F ]+$' } | ForEach-Object { $_ -replace ' ', '' })[0]
           "$hash  bandit-local-${{ matrix.os_tag }}.zip" | Out-File -Encoding ascii "SHA256SUMS-${{ matrix.os_tag }}.txt"
-
       # ---------- Release erstellen/aktualisieren + Assets hochladen ----------
       - name: Create or update release and upload assets
         uses: ncipollo/release-action@v1
@@ -105,5 +98,4 @@ jobs:
             bandit-local-${{ matrix.os_tag }}.zip
             SHA256SUMS-${{ matrix.os_tag }}.txt
           token: ${{ secrets.GITHUB_TOKEN }}
-
 

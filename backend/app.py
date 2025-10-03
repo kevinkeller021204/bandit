@@ -241,8 +241,10 @@ class RunRequest(BaseModel):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_DIR = os.path.join(ROOT, "frontend_dist") 
 
-app = Quart(__name__, static_folder=DIST_DIR, static_url_path="/")
-app.config.setdefault("PROVIDE_AUTOMATIC_OPTIONS", True)
+app = Quart(__name__)
+# (Optional) keep this for safety, but it’s no longer needed for init-time routing:
+app.config["PROVIDE_AUTOMATIC_OPTIONS"] = True
+
 
 
 def make_env(env_type: EnvType, n_actions: int, seed: Optional[int]) -> BanditEnvBase:
