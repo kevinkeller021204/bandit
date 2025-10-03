@@ -47,7 +47,34 @@ r'''
 
 
 BASE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-FRONTEND_DIR = os.path.join(BASE, "frontend_dist")
+def find_frontend_dir():
+    candidates = []
+
+    # 1) PyInstaller temp dir (Onefile)
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(os.path.join(meipass, "frontend_dist"))
+
+    # 2) Neben der ausführbaren Datei (Onefile ohne --add-data, wie bei dir)
+    exe_dir = os.path.dirname(os.path.abspath(getattr(sys, "executable", __file__)))
+    candidates.append(os.path.join(exe_dir, "frontend_dist"))
+
+    # 3) Neben der .py-Datei (Dev-Run)
+    file_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(file_dir, "frontend_dist"))
+
+    # 4) Optional: Override per ENV
+    env_dir = os.getenv("FRONTEND_DIR")
+    if env_dir:
+        candidates.insert(0, env_dir)
+
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return None
+
+FRONTEND_DIR = find_frontend_dir()
+
 
 class BanditEnvBase:
     #base class (bp)
@@ -256,13 +283,13 @@ def make_env(env_type: EnvType, n_actions: int, seed: Optional[int]) -> BanditEn
         return BernoulliBanditEnv(n_actions, seed=seed)
     return GaussianBanditEnv(n_actions, seed=seed)
 
-frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend/dist")
+
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 async def serve_frontend(path: str):
-    if not os.path.isdir(FRONTEND_DIR):
-        return f"Frontend fehlt: {FRONTEND_DIR}", 500
+    if not FRONTEND_DIR:
+        return "Frontend fehlt. Gesucht in _MEIPASS, neben der Binary und neben app.py.", 500
     full = os.path.join(FRONTEND_DIR, path)
     if path and os.path.isfile(full):
         return await send_from_directory(FRONTEND_DIR, path)
