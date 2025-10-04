@@ -5,8 +5,7 @@ const ALL_ALGOS = [
   { key: 'greedy', label: 'Greedy (min)' },
   { key: 'epsilon_greedy', label: 'Epsilon-Greedy (min)' },
   { key: 'ucb1', label: 'UCB1 (adv)' },
-  { key: 'thompson', label: 'Thompson Sampling (adv)' },
-  { key: 'gradient', label: 'Gradient Bandit (adv)' },
+  { key: 'thompson', label: 'Thompson Sampling (adv)' }
 ]
 
 export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void; disabled?: boolean }) {
