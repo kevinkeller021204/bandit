@@ -1,4 +1,4 @@
-import type { RunConfig, RunResponse } from '@/types'
+import type { RunConfig, RunResponse, UploadedAlgorithm } from '@/types'
 
 // Hinweis:
 // Keine harte BASE-URL mehr! Wir rufen relativ zur aktuell geladenen Seite auf.
@@ -30,6 +30,26 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 30000): 
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function uploadAlgorithm(
+  file: File,
+  meta: { name: string; language: 'python'; entry: string; sha256: string }
+): Promise<UploadedAlgorithm> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('meta', JSON.stringify(meta));
+
+  const res = await fetch('/api/algorithms', { method: 'POST', body: form });
+  if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+  return res.json();
+}
+
+// GET /api/algorithms  -> UploadedAlgorithm[]
+export async function listAlgorithms(): Promise<UploadedAlgorithm[]> {
+  const res = await fetch('/api/algorithms');
+  if (!res.ok) throw new Error(`List failed (${res.status})`);
+  return res.json();
 }
 
 export async function runExperiment(cfg: RunConfig): Promise<RunResponse> {
