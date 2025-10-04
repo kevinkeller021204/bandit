@@ -269,13 +269,8 @@ class RunRequest(BaseModel):
     algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"])
     seed: Optional[int] = None
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DIST_DIR = os.path.join(ROOT, "frontend_dist") 
-
-app = cors(Quart(__name__), allow_origin="*", allow_headers="*", allow_methods=["GET", "POST", "OPTIONS"])
-# (Optional) keep this for safety, but it’s no longer needed for init-time routing:
-app.config["PROVIDE_AUTOMATIC_OPTIONS"] = True
-
+#!!keep allow origin!!, needed for further proxy config for package
+app = cors(Quart(__name__), allow_origin="*")
 
 
 def make_env(env_type: EnvType, n_actions: int, seed: Optional[int]) -> BanditEnvBase:
