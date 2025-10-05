@@ -9,6 +9,8 @@ from quart import Quart, jsonify, request, send_from_directory
 from quart_cors import cors
 from pydantic import BaseModel, Field, ValidationError
 import os
+import json, zipfile, importlib.util, hashlib, shutil
+
 
 
 r'''
@@ -74,6 +76,9 @@ def find_frontend_dir():
     return None
 
 FRONTEND_DIR = find_frontend_dir()
+EXEC_DIR = os.path.dirname(os.path.abspath(getattr(sys, "executable", __file__)))
+ALGO_DIR = os.environ.get("ALGO_DIR") or os.path.join(EXEC_DIR, "alg_store")
+os.makedirs(ALGO_DIR, exist_ok=True)
 
 
 class BanditEnvBase:
@@ -258,7 +263,7 @@ ALGOS = {
 #                                         #
 #                                         #
 #                                         #
-# ----------------------------------------#
+# ----------------------------------------# 
 
 EnvType = Literal["bernoulli", "gaussian"]
 
@@ -268,9 +273,41 @@ class RunRequest(BaseModel):
     iterations: int = Field(ge=1, le=50_000)
     algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"])
     seed: Optional[int] = None
+    custom_algorithms: Optional[List[str]] = None  # NEW
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_DIR = os.path.join(ROOT, "frontend_dist") 
+
+class CustomAlgoWrapper(AlgorithmBase):
+    name = "Custom"
+
+    def __init__(self, n_actions: int, seed: Optional[int], entry_fn):
+        super().__init__(n_actions, seed)
+        self._entry = entry_fn
+        self._t = 0
+        self._last_action: Optional[int] = None
+        self._last_reward: Optional[float] = None
+        self._seed = seed
+
+    def select_action(self) -> int:
+        state = {
+            "n_actions": self.n_actions,
+            "t": self._t,
+            "last_action": self._last_action,
+            "last_reward": self._last_reward,
+            "seed": self._seed,
+        }
+        try:
+            a = int(self._entry(state))
+        except Exception as e:
+            raise RuntimeError(f"Custom algorithm error at t={self._t}: {e}")
+        return max(0, min(self.n_actions - 1, a))
+
+    def update(self, action: int, reward: float) -> None:
+        self._last_action = int(action)
+        self._last_reward = float(reward)
+        self._t += 1
 
 app = cors(Quart(__name__), allow_origin="*", allow_headers="*", allow_methods=["GET", "POST", "OPTIONS"])
 # (Optional) keep this for safety, but it’s no longer needed for init-time routing:
@@ -282,6 +319,46 @@ def make_env(env_type: EnvType, n_actions: int, seed: Optional[int]) -> BanditEn
         return BernoulliBanditEnv(n_actions, seed=seed)
     return GaussianBanditEnv(n_actions, seed=seed)
 
+def sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def _find_main_py(root: str) -> str | None:
+    # prefer common names
+    for cand in ("main.py", "algo.py", "algorithm.py"):
+        p = os.path.join(root, cand)
+        if os.path.isfile(p):
+            return cand
+    # else first .py anywhere
+    for dirpath, _dirs, files in os.walk(root):
+        for fn in files:
+            if fn.endswith(".py"):
+                return os.path.relpath(os.path.join(dirpath, fn), root)
+    return None
+
+def _load_meta(aid: str) -> dict | None:
+    p = os.path.join(ALGO_DIR, aid, "meta.json")
+    if os.path.isfile(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def _import_callable(module_path: str, func_name: str):
+    """Import function from an absolute file path."""
+    mod_name = "custom_algo_" + os.path.basename(os.path.dirname(module_path)).replace("-", "_")
+    spec = importlib.util.spec_from_file_location(mod_name, module_path)
+    if not spec or not spec.loader:
+        raise RuntimeError("Failed to create module spec for custom algorithm")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    fn = getattr(mod, func_name, None)
+    if not callable(fn):
+        raise RuntimeError(f"Entry function '{func_name}' not found in '{module_path}'")
+    return fn
 
 
 @app.route("/", defaults={"path": ""})
@@ -309,8 +386,33 @@ async def run_experiment():
 
     env = make_env(cfg.env, cfg.n_actions, cfg.seed)
 
+    # Build algorithm set: built-ins + custom uploads
+    builtins: Dict[str, AlgorithmBase] = {
+        key: ALGOS[key](cfg.n_actions, seed=cfg.seed)
+        for key in (cfg.algorithms or [])
+        if key in ALGOS
+    }
+
+    customs: Dict[str, AlgorithmBase] = {}
+    if getattr(cfg, "custom_algorithms", None):
+        for aid in cfg.custom_algorithms:
+            meta = _load_meta(aid)
+            if not meta:
+                continue
+            module_path = os.path.join(ALGO_DIR, aid, meta.get("module", "main.py"))
+            try:
+                entry_fn = _import_callable(module_path, meta.get("entry", "run"))
+            except Exception as e:
+                # skip broken custom algo but keep running others
+                print(f"[custom:{aid}] load failed: {e}", file=sys.stderr)
+                continue
+            label = f"custom:{meta.get('name', aid)}"
+            customs[label] = CustomAlgoWrapper(cfg.n_actions, cfg.seed, entry_fn)
+
+    algs: Dict[str, AlgorithmBase] = {**builtins, **customs}
+
     #line stays at zero when user picks no algorithm
-    if not cfg.algorithms:
+    if not algs:
         iterations = cfg.iterations
         traces = {
             "empty_trace": {
@@ -331,34 +433,36 @@ async def run_experiment():
             "summary": summary
         })
 
-    algs: Dict[str, AlgorithmBase] = {
-        key: ALGOS[key](cfg.n_actions, seed=cfg.seed) for key in cfg.algorithms if key in ALGOS
-    }
-
     traces: Dict[str, Dict[str, list]] = {
         name: {"rewards": [], "actions": []} for name in algs.keys()
     }
 
     for t in range(cfg.iterations):
         for name, algo in algs.items():
-            a = algo.select_action()
-            r = env.step(a)
-            algo.update(a, r)
+            try:
+                a = algo.select_action()
+                r = env.step(a)
+                algo.update(a, r)
+            except Exception as e:
+                # if an algo errors mid-run, record a safe fallback and continue
+                print(f"[algo {name}] t={t} error: {e}", file=sys.stderr)
+                a, r = 0, 0.0
             traces[name]["actions"].append(a)
             traces[name]["rewards"].append(r)
 
-    summary = {}
+    summary: Dict[str, dict] = {}
     for name, data in traces.items():
         rewards = data["rewards"]
-        cum = 0.0
-        avg = []
-        for i, v in enumerate(rewards, start=1):
-            cum += v
-            avg.append(cum / i)
-        summary[name] = {
-            "mean_reward": sum(rewards) / len(rewards) if rewards else 0.0,
-            "final_avg_reward": avg[-1] if avg else 0.0,
-        }
+        if rewards:
+            cum = 0.0
+            last_avg = 0.0
+            for i, v in enumerate(rewards, start=1):
+                cum += v
+                last_avg = cum / i
+            mean = cum / len(rewards)
+        else:
+            mean = last_avg = 0.0
+        summary[name] = {"mean_reward": mean, "final_avg_reward": last_avg}
 
     return jsonify({
         "env": env.info(),
@@ -366,6 +470,93 @@ async def run_experiment():
         "traces": traces,
         "summary": summary,
     })
+    
+@app.post("/api/algorithms")
+async def api_upload_algorithm():
+    """
+    Multipart form:
+      file: .py or .zip
+      meta: JSON { name, language:'python', entry:'run', sha256 }
+    Stores under ALGO_DIR/<id>/ and returns { id, name, language, entry }.
+    """
+    files = await request.files
+    form  = await request.form
+    f = files.get("file")
+    meta_raw = form.get("meta") or "{}"
+    try:
+        meta = json.loads(meta_raw)
+    except Exception:
+        return jsonify({"error": "Invalid meta JSON"}), 400
+
+    if not f:
+        return jsonify({"error": "file missing"}), 400
+
+    name = (meta.get("name") or f.filename or "custom").strip()
+    entry = (meta.get("entry") or "run").strip()
+    aid = uuid.uuid4().hex
+    out_dir = os.path.join(ALGO_DIR, aid)
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Save original
+    orig_path = os.path.join(out_dir, f.filename)
+    await f.save(orig_path)  # Quart's FileStorage supports await save()
+
+    # If zip → extract
+    module_rel: Optional[str] = None
+    if orig_path.lower().endswith(".zip"):
+        with zipfile.ZipFile(orig_path, "r") as z:
+            z.extractall(out_dir)
+        # allow manifest.json to override entry/module
+        mpath = os.path.join(out_dir, "manifest.json")
+        if os.path.isfile(mpath):
+            try:
+                m = json.load(open(mpath, "r", encoding="utf-8"))
+                entry = (m.get("entry") or entry).strip()
+                module_rel = m.get("module")  # optional e.g. "my_agent.py"
+            except Exception:
+                pass
+        if not module_rel:
+            module_rel = _find_main_py(out_dir)
+    else:
+        # single .py → use that as module
+        module_rel = os.path.basename(orig_path)
+
+    if not module_rel:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        return jsonify({"error": "No Python file found in upload"}), 400
+
+    digest = sha256_file(orig_path)
+    claimed = (meta.get("sha256") or "").lower().strip()
+    if claimed and claimed != digest:
+        # not fatal, but report mismatch
+        return jsonify({"error": "sha256 mismatch", "have": digest, "want": claimed}), 400
+
+    meta_out = {
+        "id": aid,
+        "name": name,
+        "language": "python",
+        "entry": entry,
+        "module": module_rel.replace("\\", "/"),
+        "sha256": digest,
+    }
+    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as fh:
+        json.dump(meta_out, fh)
+
+    # minimal response for your UI
+    return jsonify({k: meta_out[k] for k in ("id", "name", "language", "entry", "sha256")}), 201
+
+
+@app.get("/api/algorithms")
+async def api_list_algorithms():
+    items = []
+    for aid in os.listdir(ALGO_DIR):
+        meta = _load_meta(aid)
+        if meta:
+            items.append({k: meta[k] for k in ("id", "name", "language", "entry", "sha256") if k in meta})
+    # newest first
+    items.sort(key=lambda m: m.get("id", ""), reverse=True)
+    return jsonify(items)
+
 
 
 #dont change port, if ngrok throws an error ask kevin or chatgpt, probable cause in index.ts 
