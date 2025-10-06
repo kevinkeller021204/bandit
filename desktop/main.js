@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const NGROK_KEY = 'ngrok_authtoken';
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 import fetch from 'cross-fetch';
@@ -23,7 +23,13 @@ const GH_SCOPES = "repo"; // read private releases
 const APPDATA = app.getPath('userData');
 
 let win, serverProc, ngrokUrl;
+//stop caching, generic webdevelopment frontend problem
+app.commandLine.appendSwitch("disable-http-cache");
 
+app.whenReady().then(async () => {
+  await session.defaultSession.clearCache();
+  createWindow();
+});
 
 
 function createWindow() {
