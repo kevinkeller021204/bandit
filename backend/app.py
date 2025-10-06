@@ -366,10 +366,24 @@ def _import_callable(module_path: str, func_name: str):
 async def serve_frontend(path: str):
     if not FRONTEND_DIR:
         return "Frontend fehlt. Gesucht in _MEIPASS, neben der Binary und neben app.py.", 500
+
     full = os.path.join(FRONTEND_DIR, path)
+
     if path and os.path.isfile(full):
-        return await send_from_directory(FRONTEND_DIR, path)
-    return await send_from_directory(FRONTEND_DIR, "index.html")
+        resp = await send_from_directory(FRONTEND_DIR, path)
+        if any(path.endswith(ext) for ext in (
+            ".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".woff", ".woff2"
+        )):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+    resp = await send_from_directory(FRONTEND_DIR, "index.html")
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
 
 @app.get("/api/health")
 async def health():
