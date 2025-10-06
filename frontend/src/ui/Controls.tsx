@@ -10,11 +10,51 @@ const ALL_ALGOS = [
   { key: 'thompson',        label: 'Thompson Sampling (adv)' },
 ]
 
+const ALGO_INFO_HTML: Record<string, string> = {
+  greedy: `
+    <h3 class="font-semibold mb-1">Greedy</h3>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>Wählt immer die aktuell beste bekannte Aktion (höchster geschätzter Wert).</li>
+      <li><strong>Vorteil:</strong> nutzt vorhandenes Wissen maximal aus.</li>
+      <li><strong>Nachteil:</strong> keine Exploration &rarr; kann in lokalem Optimum stecken bleiben.</li>
+      <li>Update der Schätzung: inkrementelles Mittel der beobachteten Rewards.</li>
+    </ul>
+  `,
+  epsilon_greedy: `
+    <h3 class="font-semibold mb-1">Epsilon-Greedy</h3>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>Mit Wahrscheinlichkeit <code>ε</code> wird zufällig exploriert, sonst greedy ausgebeutet.</li>
+      <li><strong>Parameter:</strong> <code>ε</code> in [0,1] (z. B. 0.1).</li>
+      <li><strong>Trade-off:</strong> Exploration vs. Exploitation.</li>
+      <li>Geeignet als einfacher, robuster Standard.</li>
+    </ul>
+  `,
+  ucb1: `
+    <h3 class="font-semibold mb-1">UCB1 (Upper Confidence Bound)</h3>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>Wählt Aktion mit <em>Schätzwert + Unsicherheitsbonus</em>.</li>
+      <li>Intuition: bevorzugt gute Mittelwerte <em>und</em> wenig beprobte Aktionen.</li>
+      <li>Formel (vereinfacht): <code>mean_i + sqrt(2 * ln(t) / n_i)</code></li>
+      <li>Sehr wirksam bei stationären Banditen.</li>
+    </ul>
+  `,
+  thompson: `
+    <h3 class="font-semibold mb-1">Thompson Sampling</h3>
+    <ul class="list-disc pl-5 space-y-1">
+      <li>Bayesianisch: zieht zufällig aus Posterior-Verteilungen (z. B. Beta bei Bernoulli).</li>
+      <li>Natürliche Balance zwischen Exploration &amp; Exploitation.</li>
+      <li>Oft sehr schnelle Konvergenz und starke praktische Performance.</li>
+    </ul>
+  `,
+};
+
+
 export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void; disabled?: boolean }) {
   const [env, setEnv] = useState<EnvType>('bernoulli')
   const [nActions, setNActions] = useState(10)
   const [iterations, setIterations] = useState(1000)
   const [seed, setSeed] = useState<number | ''>('' as any)
+  const [openInfo, setOpenInfo] = useState<string | null>(null);
 
   // built-ins
   const [algos, setAlgos] = useState<string[]>(['greedy', 'epsilon_greedy'])
@@ -47,6 +87,11 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
     }
     onRun(cfg)
   }
+
+  function toggleInfo(key: string) {
+  setOpenInfo(prev => (prev === key ? null : key));
+}
+
 
   return (
     <div className="space-y-6">
@@ -85,12 +130,44 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
         <div className="label mb-2">Algorithms</div>
         <div className="grid grid-cols-1 gap-2">
           {/* built-ins */}
-          {ALL_ALGOS.map(a => (
-            <label key={a.key} className="flex items-center gap-3">
-              <input type="checkbox" checked={algos.includes(a.key)} onChange={() => toggleAlgo(a.key)} />
-              <span>{a.label}</span>
-            </label>
-          ))}
+{ALL_ALGOS.map(a => (
+  <div key={a.key} className="rounded border border-zinc-200 p-2">
+    <div className="flex items-center justify-between gap-3">
+      <label className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          checked={algos.includes(a.key)}
+          onChange={() => toggleAlgo(a.key)}
+        />
+        <span>{a.label}</span>
+      </label>
+
+      {/* ?-Button rechts */}
+      <button
+        type="button"
+        className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
+        title="Erklärung anzeigen"
+        onClick={() => toggleInfo(a.key)}
+        aria-expanded={openInfo === a.key}
+        aria-controls={`algo-info-${a.key}`}
+      >
+        ?
+      </button>
+    </div>
+
+    {/* Ausklappbarer Bereich */}
+    {openInfo === a.key && (
+      <div
+        id={`algo-info-${a.key}`}
+        className="mt-2 rounded bg-zinc-50 p-3 text-sm"
+        dangerouslySetInnerHTML={{
+          __html: ALGO_INFO_HTML[a.key] || '<em>Keine Beschreibung verfügbar.</em>',
+        }}
+      />
+    )}
+  </div>
+))}
+
 
           {/* uploaded section appears automatically after the first upload */}
           {uploaded.length > 0 && (
@@ -120,9 +197,7 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
         <button className="btn" onClick={run} disabled={disabled}>Run</button>
       </div>
 
-      <div className="text-xs text-zinc-500">
-        Hier ausklappbares Markdown für die Beschreibung der Algorithmen. Fragezeichen soll neben den algos.
-      </div>
+
     </div>
   )
 }
