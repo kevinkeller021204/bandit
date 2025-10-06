@@ -110,9 +110,22 @@ async function latestRelease(token) {
   const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" }
   });
-  if (!r.ok) throw new Error("GitHub API: " + r.status);
+
+  if (r.status === 401) {
+    console.warn("GitHub token ungültig oder revoked – starte neuen Device Flow …");
+    await keytar.deletePassword(GH_APP_NAME, 'github_token'); // alten Token löschen
+    const newTok = await getToken(); // automatisch neu authentifizieren
+    // nochmal probieren
+    return latestRelease(newTok);
+  }
+
+  if (!r.ok) {
+    throw new Error("GitHub API: " + r.status);
+  }
+
   return await r.json();
 }
+
 
 async function dl(token, asset, outDir = APPDATA) {
   const out = path.join(outDir, asset.name);
