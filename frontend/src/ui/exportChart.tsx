@@ -1,10 +1,9 @@
-// Exportiert SVG- oder Canvas-basierte Charts als PNG/SVG – ohne externe Libraries.
 export type PngExportOptions = {
-  width?: number;      // z. B. 1920
-  height?: number;     // z. B. 1080
-  background?: string; // z. B. "#ffffff"
-  pixelRatio?: number; // z. B. 2 (Retina)
-  filename?: string;   // z. B. "chart.png"
+  width?: number;      
+  height?: number;     
+  background?: string; 
+  pixelRatio?: number; 
+  filename?: string;   
 };
 
 function downloadDataUrl(dataUrl: string, filename: string) {
@@ -16,8 +15,6 @@ function downloadDataUrl(dataUrl: string, filename: string) {
 
 function serializeSvg(svg: SVGSVGElement): string {
   const clone = svg.cloneNode(true) as SVGSVGElement;
-
-  // Falls viewBox existiert: Breite/Höhe daraus setzen für korrektes Rasterisieren
   if (clone.hasAttribute('viewBox')) {
     const [, , w, h] = (clone.getAttribute('viewBox') ?? '0 0 0 0').split(/\s+/).map(Number);
     if (!clone.getAttribute('width'))  clone.setAttribute('width', String(w || 0));
@@ -25,7 +22,6 @@ function serializeSvg(svg: SVGSVGElement): string {
   }
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 
-  // Recharts nutzt oft CSS. Minimal: style inline lassen (wird von Browser auf img gerendert).
   return new XMLSerializer().serializeToString(clone);
 }
 
@@ -38,7 +34,7 @@ export async function exportNodeAsPNG(node: HTMLElement, opts: PngExportOptions 
     filename = 'chart.png',
   } = opts;
 
-  // 1) Canvas-Fall (z. B. Chart.js)
+  // 1) Canvas-Fall
   const canvas = node.querySelector('canvas') as HTMLCanvasElement | null;
   if (canvas) {
     const w = width ?? canvas.width;
@@ -58,7 +54,7 @@ export async function exportNodeAsPNG(node: HTMLElement, opts: PngExportOptions 
     return;
   }
 
-  // 2) SVG-Fall (Recharts rendert SVG)
+  // 2) SVG-Fall
   const svg = node.querySelector('svg') as SVGSVGElement | null;
   if (!svg) throw new Error('Kein <svg> in der Chart-Node gefunden.');
 
@@ -104,7 +100,7 @@ export function exportNodeAsSVG(node: HTMLElement, filename = 'chart.svg') {
 export async function copyNodeAsPNGToClipboard(node: HTMLElement, opts: PngExportOptions = {}) {
   const { width, height, background = '#ffffff', pixelRatio = 2 } = opts;
 
-  // Render identisch zu exportNodeAsPNG, aber schreibe ins Clipboard
+  // Render identisch zu exportNodeAsPNG
   let canvasOut: HTMLCanvasElement | null = null;
 
   const canvas = node.querySelector('canvas') as HTMLCanvasElement | null;

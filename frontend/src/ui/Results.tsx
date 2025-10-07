@@ -42,11 +42,9 @@ export function Results({ data, loading }: { data: RunResponse | null, loading: 
     return row
   })
 
-  // 🔹 Refs für Export
   const lineRef = useRef<HTMLDivElement | null>(null)
   const barRef  = useRef<HTMLDivElement | null>(null)
 
-  // 🔹 Dateinamen-Helper
   const ts = new Date().toISOString().replace(/[:.]/g, '-')
   const base = `${data.env.type}-${data.env.n_actions}a-${len}it`
 
@@ -78,8 +76,6 @@ export function Results({ data, loading }: { data: RunResponse | null, loading: 
           Type: <span className="font-medium">{data.env.type}</span> • Actions: <span className="font-medium">{data.env.n_actions}</span> • Iterations: <span className="font-medium">{len}</span>
         </div>
       </div>
-
-      {/* Avg Reward over Time */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="label">Average Reward over Time</div>
@@ -105,8 +101,6 @@ export function Results({ data, loading }: { data: RunResponse | null, loading: 
           </div>
         </div>
       </div>
-
-      {/* Action Selection Distribution */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="label">Action Selection Distribution</div>
