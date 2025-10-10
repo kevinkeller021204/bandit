@@ -13,9 +13,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            os_tag: linux
-            py_ver: "3.11"
           - os: macos-latest
             os_tag: macos
             py_ver: "3.11"
@@ -56,10 +53,9 @@ jobs:
           pip install pyinstaller
           pyinstaller --onefile --name bandit-server app.py
 
-      # ---------- Bundle + checksum (OS-spezifisch) ----------
-      # Linux + macOS: zip/sha
-      - name: Make bundle (unix)
-        if: runner.os != 'Windows'
+      # ---------- Bundle + checksum ----------
+      - name: Make bundle (macOS)
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
@@ -67,15 +63,10 @@ jobs:
           cp backend/dist/*bandit-server* bundle/
           cp -R frontend/dist/* bundle/frontend_dist/
           cd bundle
-          zip -r "../bandit-local-${{ matrix.os_tag }}.zip" .
+          zip -r "../bandit-local-macos.zip" .
           cd ..
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            shasum -a 256 "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
-          else
-            sha256sum "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
-          fi
+          shasum -a 256 "bandit-local-macos.zip" > "SHA256SUMS-macos.txt"
 
-      # Windows: PowerShell Compress-Archive + CertUtil (SHA256)
       - name: Make bundle (windows)
         if: runner.os == 'Windows'
         shell: powershell
@@ -83,65 +74,97 @@ jobs:
           New-Item -ItemType Directory -Force -Path bundle\frontend_dist | Out-Null
           Copy-Item -Path backend\dist\*bandit-server* -Destination bundle\ -Force
           Copy-Item -Path frontend\dist\* -Destination bundle\frontend_dist\ -Recurse -Force
-          if (Test-Path "bandit-local-${{ matrix.os_tag }}.zip") { Remove-Item "bandit-local-${{ matrix.os_tag }}.zip" -Force }
-          Compress-Archive -Path bundle\* -DestinationPath "bandit-local-${{ matrix.os_tag }}.zip" -Force
-          $hash = (Get-FileHash "bandit-local-${{ matrix.os_tag }}.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  bandit-local-${{ matrix.os_tag }}.zip" | Out-File -Encoding ascii "SHA256SUMS-${{ matrix.os_tag }}.txt"
+          if (Test-Path "bandit-local-windows.zip") { Remove-Item "bandit-local-windows.zip" -Force }
+          Compress-Archive -Path bundle\* -DestinationPath "bandit-local-windows.zip" -Force
+          $hash = (Get-FileHash "bandit-local-windows.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  bandit-local-windows.zip" | Out-File -Encoding ascii "SHA256SUMS-windows.txt"
 
       # ---------- Electron Desktop Installer ----------
-      # Baut klickbare Installer pro OS (Windows: .exe/NSIS, macOS: .dmg, Linux: .AppImage)
+      - name: Find Electron project dir
+        id: find-electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDS=("desktop" "app" "electron" ".")
+          FOUND=""
+          for d in "${CANDS[@]}"; do
+            if [ -f "$d/package.json" ]; then
+              if jq -e '.main or (.devDependencies.electron // .dependencies.electron)' "$d/package.json" >/dev/null 2>&1; then
+                FOUND="$d"; break
+              fi
+            fi
+          done
+          echo "dir=$FOUND" >> "$GITHUB_OUTPUT"
+          if [ -z "$FOUND" ]; then
+            echo "No Electron project found. Skipping installer build."
+          else
+            echo "Found Electron project at: $FOUND"
+          fi
+
       - name: Install desktop dependencies
+        if: steps.find-electron.outputs.dir != ''
+        working-directory: ${{ steps.find-electron.outputs.dir }}
         run: |
           npm install
 
       - name: Build Electron installer
+        if: steps.find-electron.outputs.dir != ''
+        working-directory: ${{ steps.find-electron.outputs.dir }}
         env:
-          # verhindert, dass macOS-Signing/Notarisierung benötigt wird (unsignierte Builds)
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           npm run build
 
-      # Stabile Dateinamen vergeben (pro OS verschieden)
       - name: Rename installer (windows)
-        if: runner.os == 'Windows'
+        if: steps.find-electron.outputs.dir != '' && runner.os == 'Windows'
         shell: powershell
+        working-directory: ${{ steps.find-electron.outputs.dir }}
         run: |
           $exe = Get-ChildItem -Path dist -Filter *.exe | Select-Object -First 1
           if (-not $exe) { throw "No .exe produced in dist/" }
-          Move-Item $exe.FullName "Bandit-Setup-Windows.exe" -Force
+          Move-Item $exe.FullName "$PWD\Bandit-Setup-Windows.exe" -Force
 
       - name: Rename installer (macOS)
-        if: runner.os == 'macOS'
+        if: steps.find-electron.outputs.dir != '' && runner.os == 'macOS'
         shell: bash
+        working-directory: ${{ steps.find-electron.outputs.dir }}
         run: |
           set -euo pipefail
-          DMG=$(ls dist/*.dmg | head -n1)
-          [ -f "$DMG" ] || { echo "No .dmg produced in dist/"; exit 1; }
+          DMG=$(ls dist/*.dmg | head -n1 || true)
+          if [ -z "$DMG" ]; then echo "No .dmg produced in dist/"; exit 1; fi
           mv "$DMG" "Bandit-macOS.dmg"
 
-      - name: Rename installer (linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          APPIMG=$(ls dist/*.AppImage | head -n1)
-          [ -f "$APPIMG" ] || { echo "No .AppImage produced in dist/"; exit 1; }
-          mv "$APPIMG" "Bandit-Linux.AppImage"
-
-      # ---------- Release erstellen/aktualisieren + Assets hochladen ----------
-      - name: Create or update release and upload assets
+      # ---------- Upload Assets ----------
+      - name: Upload assets (Windows)
+        if: runner.os == 'Windows'
         uses: ncipollo/release-action@v1
         with:
           tag:  ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          makeLatest: true
           allowUpdates: true
           omitBodyDuringUpdate: true
+          artifactErrorsFailBuild: false
           artifacts: |
-            bandit-local-${{ matrix.os_tag }}.zip
-            SHA256SUMS-${{ matrix.os_tag }}.txt
-            Bandit-Setup-Windows.exe
-            Bandit-macOS.dmg
-            Bandit-Linux.AppImage
+            bandit-local-windows.zip
+            SHA256SUMS-windows.txt
+            ${{ steps.find-electron.outputs.dir && 'desktop/Bandit-Setup-Windows.exe' || '' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload assets (macOS)
+        if: runner.os == 'macOS'
+        uses: ncipollo/release-action@v1
+        with:
+          tag:  ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          makeLatest: true
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          artifactErrorsFailBuild: false
+          artifacts: |
+            bandit-local-macos.zip
+            SHA256SUMS-macos.txt
+            ${{ steps.find-electron.outputs.dir && 'desktop/Bandit-macOS.dmg' || '' }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
   # ------------ README automatisch mit Installer-Links aktualisieren ------------
@@ -157,7 +180,6 @@ jobs:
           fetch-depth: 0
 
       - name: Build downloads block
-        id: block
         run: |
           OWNER_REPO="${GITHUB_REPOSITORY}"
           cat > /tmp/downloads.md <<'MD'
@@ -165,12 +187,10 @@ jobs:
 
           - **Windows** – [Bandit-Setup-Windows.exe](https://github.com/${OWNER_REPO}/releases/latest/download/Bandit-Setup-Windows.exe)
           - **macOS** – [Bandit-macOS.dmg](https://github.com/${OWNER_REPO}/releases/latest/download/Bandit-macOS.dmg)
-          - **Linux** – [Bandit-Linux.AppImage](https://github.com/${OWNER_REPO}/releases/latest/download/Bandit-Linux.AppImage)
 
           > CI Bundles (for internal pipeline):  
           > - [bandit-local-windows.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-windows.zip)  
-          > - [bandit-local-macos.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-macos.zip)  
-          > - [bandit-local-linux.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-linux.zip)
+          > - [bandit-local-macos.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-macos.zip)
           MD
           sed -i "s|\${OWNER_REPO}|${OWNER_REPO}|g" /tmp/downloads.md
 
