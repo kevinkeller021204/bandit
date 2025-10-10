@@ -27,7 +27,11 @@
       "**/*"
     ],
     "mac": {
-      "category": "public.app-category.education"
+      "target": "dmg",
+      "category": "public.app-category.education",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "win": {
       "target": "nsis"
@@ -36,5 +40,4 @@
       "target": "AppImage"
     }
   }
-  
 }

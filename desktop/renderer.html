@@ -22,6 +22,8 @@
     <div class="row">
       <button id="offline">Host offline</button>
       <button id="online" class="secondary">Host online (ngrok)</button>
+      <button id="del-ngrok"  class="secondary" style="display:none;">ngrok-Token löschen</button>
+      <button id="del-github" class="secondary" style="display:none;">GitHub-Token löschen</button>
       <div class="spinner" id="spin"></div>
       <div id="device" style="margin-top:10px; padding:10px; background:#f1f5f9; border-radius:8px; display:none;">
         <div><strong>GitHub Code:</strong> <span id="device-code" style="font-family:monospace;"></span></div>
@@ -59,7 +61,31 @@
   const ngrokInput = document.getElementById('ngrok-input');
   const ngrokSave = document.getElementById('ngrok-save');
   const ngrokCancel = document.getElementById('ngrok-cancel');
+  const btnDelNgrok  = document.getElementById('del-ngrok');
+  const btnDelGithub = document.getElementById('del-github');
 
+  // beim Start den Status anfordern
+  window.bandit.send('check-credentials');
+
+  // Antwort: Buttons ein-/ausblenden
+  window.bandit.on('credentials-status', (s) => {
+    btnDelNgrok.style.display  = s.ngrok  ? '' : 'none';
+    btnDelGithub.style.display = s.github ? '' : 'none';
+  });
+
+  // live updaten, wenn sich etwas ändert (z.B. nach Speichern/Löschen)
+  window.bandit.on('credentials-changed', (delta) => {
+    if (typeof delta.ngrok  === 'boolean')  btnDelNgrok.style.display  = delta.ngrok  ? '' : 'none';
+    if (typeof delta.github === 'boolean')  btnDelGithub.style.display = delta.github ? '' : 'none';
+  });
+
+  // Klick-Handler
+  btnDelNgrok.onclick = () => {
+    if (confirm('ngrok-Token wirklich löschen?'))  window.bandit.send('delete-credentials', 'ngrok');
+  };
+  btnDelGithub.onclick = () => {
+    if (confirm('GitHub-Token wirklich löschen?')) window.bandit.send('delete-credentials', 'github');
+  };
 // Main sagt: Token wird benötigt
 window.bandit.on('need-ngrok-token', () => {
   ngrokInput.value = '';
