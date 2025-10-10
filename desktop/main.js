@@ -26,9 +26,53 @@ let win, serverProc, ngrokUrl;
 //stop caching, generic webdevelopment frontend problem
 app.commandLine.appendSwitch("disable-http-cache");
 
+//single instance lock
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+}
+
+
 app.whenReady().then(async () => {
   await session.defaultSession.clearCache();
   createWindow();
+}).catch(err => console.error('app.whenReady failed:', err));
+
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+
+// Prüfen, ob Tokens existieren
+ipcMain.on('check-credentials', async (ev) => {
+  const hasNgrok  = !!(await keytar.getPassword(GH_APP_NAME, NGROK_KEY));
+  const hasGithub = !!(await keytar.getPassword(GH_APP_NAME, 'github_token'));
+  ev.sender.send('credentials-status', { ngrok: hasNgrok, github: hasGithub });
+});
+
+// Tokens löschen (und UI updaten)
+ipcMain.on('delete-credentials', async (_ev, which) => {
+  try {
+    if (which === 'ngrok') {
+      await keytar.deletePassword(GH_APP_NAME, NGROK_KEY);
+      status('ngrok-Token gelöscht.');
+      emit('credentials-changed', { ngrok: false });
+    } else if (which === 'github') {
+      await keytar.deletePassword(GH_APP_NAME, 'github_token');
+      status('GitHub-Token gelöscht.');
+      emit('credentials-changed', { github: false });
+    } else {
+      throw new Error('Unbekannter Credential-Typ: ' + which);
+    }
+  } catch (e) { err(e); }
 });
 
 
@@ -47,14 +91,12 @@ function createWindow() {
   });
 
   win.loadFile(join(__dirname, 'renderer.html'));
-  win.webContents.openDevTools();
   win.on('closed', () => { win = null; });
 }
 
 
-app.whenReady()
-  .then(createWindow)
-  .catch(err => console.error('app.whenReady failed:', err));
+
+
 
 app.on('window-all-closed', () => { stopServer(); app.quit(); });
 
@@ -86,6 +128,7 @@ async function getToken() {
     if (js.error && js.error !== "authorization_pending") throw new Error("OAuth: " + js.error);
   }
   await keytar.setPassword(GH_APP_NAME, 'github_token', tok);
+  emit('credentials-changed', { github: true });
   return tok;
 }
 
@@ -103,6 +146,7 @@ async function getNgrokToken() {
     ipcMain.once('set-ngrok-token', async (_ev, val) => {
       if (!val || !val.trim()) return reject(new Error("Kein Token eingegeben"));
       await keytar.setPassword(GH_APP_NAME, NGROK_KEY, val.trim());
+      emit('credentials-changed', { ngrok: true });
       resolve(val.trim());
     });
     // optional Timeout:
