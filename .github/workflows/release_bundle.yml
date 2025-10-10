@@ -107,7 +107,7 @@ jobs:
         run: |
           npm install
 
-      # 🔐 Force unsigned build on macOS (prevent codesign/notarize)
+      # 🔐 Force unsigned mac build (prevent codesign/notarize)
       - name: Force unsigned mac build (electron-builder)
         if: steps.find-electron.outputs.dir != '' && runner.os == 'macOS'
         working-directory: ${{ steps.find-electron.outputs.dir }}
@@ -118,12 +118,16 @@ jobs:
         if: steps.find-electron.outputs.dir != ''
         working-directory: ${{ steps.find-electron.outputs.dir }}
         env:
+          # Deaktiviert jegliches Auto-Discovery/Signing (mac & win)
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           CSC_LINK: ""
           CSC_KEY_PASSWORD: ""
           APPLE_ID: ""
           APPLE_APP_SPECIFIC_PASSWORD: ""
           APPLE_TEAM_ID: ""
+          # 👇 wichtig für Windows: verhindert den WIN_CSC_LINK-Fehler
+          WIN_CSC_LINK: ""
+          WIN_CSC_KEY_PASSWORD: ""
         run: |
           npm run build
 
@@ -230,7 +234,6 @@ jobs:
               s = pattern.sub(start + "\n" + block + "\n" + end, s, count=1)
               print("Replaced existing downloads block.")
           else:
-              # Falls Marker fehlen: am Ende anhängen
               s = s.rstrip() + "\n\n" + start + "\n" + block + "\n" + end + "\n"
               print("Appended downloads block at end (markers were missing).")
 
