@@ -41,7 +41,7 @@ jobs:
           npm ci
           npm run build
 
-      # ---------- Backend (PyInstaller) ----------
+      # ---------- Backend (PyInstaller) -----------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
