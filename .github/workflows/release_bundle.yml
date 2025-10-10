@@ -38,7 +38,7 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: |
-          npm ci
+          npm install
           npm run build
 
       # ---------- Backend (PyInstaller) ----------
@@ -92,7 +92,7 @@ jobs:
       # Baut klickbare Installer pro OS (Windows: .exe/NSIS, macOS: .dmg, Linux: .AppImage)
       - name: Install desktop dependencies
         run: |
-          npm ci
+          npm install
 
       - name: Build Electron installer
         env:
