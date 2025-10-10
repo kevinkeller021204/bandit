@@ -9,42 +9,188 @@ permissions:
 
 jobs:
   build-bundle:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os_tag: linux
+            py_ver: "3.11"
+          - os: macos-latest
+            os_tag: macos
+            py_ver: "3.11"
+          - os: windows-latest
+            os_tag: windows
+            py_ver: "3.11"
 
-      # Frontend build
-      - uses: actions/setup-node@v4
-        with: { node-version: "20" }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ---------- Frontend build ----------
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Build frontend
         working-directory: frontend
         run: |
           npm ci
           npm run build
 
-      # Backend -> Single binary
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+      # ---------- Backend (PyInstaller) ----------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py_ver }}
+
       - name: Build backend binary
         working-directory: backend
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
           pyinstaller --onefile --name bandit-server app.py
-          # Binary: backend/dist/bandit-server
 
-      - name: Make bundle
+      # ---------- Bundle + checksum (OS-spezifisch) ----------
+      # Linux + macOS: zip/sha
+      - name: Make bundle (unix)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p bundle/frontend_dist
-          cp backend/dist/bandit-server bundle/
+          cp backend/dist/*bandit-server* bundle/
           cp -R frontend/dist/* bundle/frontend_dist/
-          cd bundle && zip -r ../bandit-local.zip . && cd ..
-          sha256sum bandit-local.zip > SHA256SUMS
+          cd bundle
+          zip -r "../bandit-local-${{ matrix.os_tag }}.zip" .
+          cd ..
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            shasum -a 256 "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
+          else
+            sha256sum "bandit-local-${{ matrix.os_tag }}.zip" > "SHA256SUMS-${{ matrix.os_tag }}.txt"
+          fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      # Windows: PowerShell Compress-Archive + CertUtil (SHA256)
+      - name: Make bundle (windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path bundle\frontend_dist | Out-Null
+          Copy-Item -Path backend\dist\*bandit-server* -Destination bundle\ -Force
+          Copy-Item -Path frontend\dist\* -Destination bundle\frontend_dist\ -Recurse -Force
+          if (Test-Path "bandit-local-${{ matrix.os_tag }}.zip") { Remove-Item "bandit-local-${{ matrix.os_tag }}.zip" -Force }
+          Compress-Archive -Path bundle\* -DestinationPath "bandit-local-${{ matrix.os_tag }}.zip" -Force
+          $hash = (Get-FileHash "bandit-local-${{ matrix.os_tag }}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  bandit-local-${{ matrix.os_tag }}.zip" | Out-File -Encoding ascii "SHA256SUMS-${{ matrix.os_tag }}.txt"
+
+      # ---------- Electron Desktop Installer ----------
+      # Baut klickbare Installer pro OS (Windows: .exe/NSIS, macOS: .dmg, Linux: .AppImage)
+      - name: Install desktop dependencies
+        run: |
+          npm ci
+
+      - name: Build Electron installer
+        env:
+          # verhindert, dass macOS-Signing/Notarisierung benötigt wird (unsignierte Builds)
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npm run build
+
+      # Stabile Dateinamen vergeben (pro OS verschieden)
+      - name: Rename installer (windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $exe = Get-ChildItem -Path dist -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "No .exe produced in dist/" }
+          Move-Item $exe.FullName "Bandit-Setup-Windows.exe" -Force
+
+      - name: Rename installer (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DMG=$(ls dist/*.dmg | head -n1)
+          [ -f "$DMG" ] || { echo "No .dmg produced in dist/"; exit 1; }
+          mv "$DMG" "Bandit-macOS.dmg"
+
+      - name: Rename installer (linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APPIMG=$(ls dist/*.AppImage | head -n1)
+          [ -f "$APPIMG" ] || { echo "No .AppImage produced in dist/"; exit 1; }
+          mv "$APPIMG" "Bandit-Linux.AppImage"
+
+      # ---------- Release erstellen/aktualisieren + Assets hochladen ----------
+      - name: Create or update release and upload assets
+        uses: ncipollo/release-action@v1
         with:
-          files: |
-            bandit-local.zip
-            SHA256SUMS
+          tag:  ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          artifacts: |
+            bandit-local-${{ matrix.os_tag }}.zip
+            SHA256SUMS-${{ matrix.os_tag }}.txt
+            Bandit-Setup-Windows.exe
+            Bandit-macOS.dmg
+            Bandit-Linux.AppImage
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------ README automatisch mit Installer-Links aktualisieren ------------
+  update-readme:
+    needs: build-bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build downloads block
+        id: block
+        run: |
+          OWNER_REPO="${GITHUB_REPOSITORY}"
+          cat > /tmp/downloads.md <<'MD'
+          ### 📥 Downloads (always latest)
+
+          - **Windows** – [Bandit-Setup-Windows.exe](https://github.com/${OWNER_REPO}/releases/latest/download/Bandit-Setup-Windows.exe)
+          - **macOS** – [Bandit-macOS.dmg](https://github.com/${OWNER_REPO}/releases/latest/download/Bandit-macOS.dmg)
+          - **Linux** – [Bandit-Linux.AppImage](https://github.com/${OWNER_REPO}/releases/latest/download/Bandit-Linux.AppImage)
+
+          > CI Bundles (for internal pipeline):  
+          > - [bandit-local-windows.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-windows.zip)  
+          > - [bandit-local-macos.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-macos.zip)  
+          > - [bandit-local-linux.zip](https://github.com/${OWNER_REPO}/releases/latest/download/bandit-local-linux.zip)
+          MD
+          sed -i "s|\${OWNER_REPO}|${OWNER_REPO}|g" /tmp/downloads.md
+
+      - name: Replace block in README
+        run: |
+          awk '
+            BEGIN{start="<!-- DOWNLOADS:START -->"; end="<!-- DOWNLOADS:END -->"; in=0}
+            $0~start{print; system("cat /tmp/downloads.md"); in=1; next}
+            $0~end{in=0}
+            !in{print}
+          ' README.md > README.tmp && mv README.tmp README.md
+
+      - name: Commit README if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet README.md; then
+            git add README.md
+            git commit -m "docs(README): update latest installer links [skip ci]"
+            git push
+          else
+            echo "README unchanged."
+          fi
