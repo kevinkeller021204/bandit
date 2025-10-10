@@ -107,8 +107,31 @@ jobs:
         run: |
           npm install
 
-      - name: Build Electron installer
-        if: steps.find-electron.outputs.dir != ''
+      # 🔐 (macOS) Force unsigned build (prevent codesign/notarize)
+      - name: Force unsigned mac build (electron-builder)
+        if: steps.find-electron.outputs.dir != '' && runner.os == 'macOS'
+        working-directory: ${{ steps.find-electron.outputs.dir }}
+        run: |
+          node -e "const fs=require('fs');const p='./package.json';const j=JSON.parse(fs.readFileSync(p));j.build=j.build||{};j.build.mac=Object.assign({target:'dmg'}, j.build.mac||{}, {identity:null, hardenedRuntime:false, gatekeeperAssess:false});fs.writeFileSync(p, JSON.stringify(j,null,2));console.log('package.json build.mac set to unsigned');"
+
+      # 🪟 (Windows) Build installer with ALL signing env UNSET in-process
+      - name: Build Electron installer (Windows)
+        if: steps.find-electron.outputs.dir != '' && runner.os == 'Windows'
+        shell: powershell
+        working-directory: ${{ steps.find-electron.outputs.dir }}
+        run: |
+          # Remove signing envs from current process so electron-builder cannot see them
+          Remove-Item Env:WIN_CSC_LINK -ErrorAction SilentlyContinue
+          Remove-Item Env:WIN_CSC_KEY_PASSWORD -ErrorAction SilentlyContinue
+          Remove-Item Env:CSC_LINK -ErrorAction SilentlyContinue
+          Remove-Item Env:CSC_KEY_PASSWORD -ErrorAction SilentlyContinue
+          # Now build
+          npm run build
+
+      # 🍎 (macOS) Build installer (with unsigned config already patched)
+      - name: Build Electron installer (macOS)
+        if: steps.find-electron.outputs.dir != '' && runner.os == 'macOS'
+        shell: bash
         working-directory: ${{ steps.find-electron.outputs.dir }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -218,14 +241,12 @@ jobs:
               s = pattern.sub(start + "\n" + block + "\n" + end, s, count=1)
               print("Replaced existing downloads block.")
           else:
-              # Falls Marker fehlen: am Ende anhängen
               s = s.rstrip() + "\n\n" + start + "\n" + block + "\n" + end + "\n"
               print("Appended downloads block at end (markers were missing).")
 
           with open(readme, "w", encoding="utf-8") as f:
               f.write(s)
           PY
-
 
       - name: Commit README if changed
         env:
@@ -237,8 +258,6 @@ jobs:
           if ! git diff --quiet README.md; then
             git add README.md
             git commit -m "docs(README): update latest installer links [skip ci]" || true
-
-            # Auf den Default-Branch pushen, auch wenn wir nicht auf einem Branch sind
             git push origin HEAD:refs/heads/$DEFAULT_BRANCH
           else
             echo "README unchanged."
