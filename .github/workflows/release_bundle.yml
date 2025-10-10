@@ -195,13 +195,36 @@ jobs:
           sed -i "s|\${OWNER_REPO}|${OWNER_REPO}|g" /tmp/downloads.md
 
       - name: Replace block in README
+        shell: bash
         run: |
-          awk '
-            BEGIN{start="<!-- DOWNLOADS:START -->"; end="<!-- DOWNLOADS:END -->"; in=0}
-            $0~start{print; system("cat /tmp/downloads.md"); in=1; next}
-            $0~end{in=0}
-            !in{print}
-          ' README.md > README.tmp && mv README.tmp README.md
+          python3 - <<'PY'
+          import re, io, sys, os
+          readme = "README.md"
+          with open("/tmp/downloads.md", "r", encoding="utf-8") as f:
+              block = f.read().strip()
+          try:
+              with open(readme, "r", encoding="utf-8") as f:
+                  s = f.read()
+          except FileNotFoundError:
+              print("README.md not found", file=sys.stderr)
+              sys.exit(1)
+
+          start = r'<!-- DOWNLOADS:START -->'
+          end   = r'<!-- DOWNLOADS:END -->'
+          pattern = re.compile(start + r'.*?' + end, re.S)
+
+          if pattern.search(s):
+              s = pattern.sub(start + "\n" + block + "\n" + end, s, count=1)
+              print("Replaced existing downloads block.")
+          else:
+              # Falls Marker fehlen: am Ende anhängen
+              s = s.rstrip() + "\n\n" + start + "\n" + block + "\n" + end + "\n"
+              print("Appended downloads block at end (markers were missing).")
+
+          with open(readme, "w", encoding="utf-8") as f:
+              f.write(s)
+          PY
+
 
       - name: Commit README if changed
         run: |
