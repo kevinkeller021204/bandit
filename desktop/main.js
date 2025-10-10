@@ -2,7 +2,10 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+const NGROK_KEY = 'ngrok_authtoken';
+import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 import fetch from 'cross-fetch';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -10,7 +13,7 @@ import crypto from 'node:crypto';
 import child_process from 'node:child_process';
 import keytar from 'keytar';
 import open from 'open';
-import ngrok from 'ngrok';
+import ngrok from '@ngrok/ngrok';
 
 const OWNER = "kevinkeller021204";
 const REPO  = "bandit";
@@ -20,22 +23,34 @@ const GH_SCOPES = "repo"; // read private releases
 const APPDATA = app.getPath('userData');
 
 let win, serverProc, ngrokUrl;
+//stop caching, generic webdevelopment frontend problem
+app.commandLine.appendSwitch("disable-http-cache");
+
+app.whenReady().then(async () => {
+  await session.defaultSession.clearCache();
+  createWindow();
+});
 
 
 function createWindow() {
+  const preloadPath = join(__dirname, 'preload.cjs');   // <— HIER definieren
+  console.log('Using preload at:', preloadPath);
+
   win = new BrowserWindow({
     width: 1000,
     height: 760,
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: preloadPath,          // <— und HIER verwenden
       contextIsolation: true,
       nodeIntegration: false
     }
   });
 
   win.loadFile(join(__dirname, 'renderer.html'));
+  win.webContents.openDevTools();
   win.on('closed', () => { win = null; });
 }
+
 
 app.whenReady()
   .then(createWindow)
@@ -74,13 +89,49 @@ async function getToken() {
   return tok;
 }
 
+async function getNgrokToken() {
+  // erst aus Keychain
+  let tok = await keytar.getPassword(GH_APP_NAME, NGROK_KEY);
+  if (tok) return tok;
+
+  // Renderer soll UI zeigen und uns den Token schicken
+  status("Bitte ngrok Authtoken eingeben …");
+  emit('need-ngrok-token'); // Renderer zeigt Eingabefeld
+
+  tok = await new Promise((resolve, reject) => {
+    // einmalig auf Antwort warten
+    ipcMain.once('set-ngrok-token', async (_ev, val) => {
+      if (!val || !val.trim()) return reject(new Error("Kein Token eingegeben"));
+      await keytar.setPassword(GH_APP_NAME, NGROK_KEY, val.trim());
+      resolve(val.trim());
+    });
+    // optional Timeout:
+    setTimeout(() => reject(new Error("Token-Eingabe abgebrochen")), 120000);
+  });
+
+  return tok;
+}
+
 async function latestRelease(token) {
   const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" }
   });
-  if (!r.ok) throw new Error("GitHub API: " + r.status);
+
+  if (r.status === 401) {
+    console.warn("GitHub token ungültig oder revoked – starte neuen Device Flow …");
+    await keytar.deletePassword(GH_APP_NAME, 'github_token'); // alten Token löschen
+    const newTok = await getToken(); // automatisch neu authentifizieren
+    // nochmal probieren
+    return latestRelease(newTok);
+  }
+
+  if (!r.ok) {
+    throw new Error("GitHub API: " + r.status);
+  }
+
   return await r.json();
 }
+
 
 async function dl(token, asset, outDir = APPDATA) {
   const out = path.join(outDir, asset.name);
@@ -143,13 +194,13 @@ async function ensureBundle() {
     status("Entpacke …");
     unzip(zipPath, dir);
     try {
-  if (process.platform !== 'win32') {
-    await fs.promises.chmod(path.join(installDir, 'bandit-server'), 0o755);
-    // macOS: Quarantine-Flag entfernen 
+    if (process.platform !== 'win32') {
+    const bin = path.join(dir, 'bandit-server');
+    await fs.promises.chmod(bin, 0o755);
     if (process.platform === 'darwin') {
-      try { child_process.execSync(`xattr -dr com.apple.quarantine "${path.join(installDir, 'bandit-server')}"`); } catch {}
+        try { child_process.execSync(`xattr -dr com.apple.quarantine "${bin}"`); } catch {}
     }
-  }
+    }
 } catch {}
 
   }
@@ -198,16 +249,38 @@ ipcMain.on('host-offline', async ()=>{
   } catch (e) { err(e); }
 });
 
-ipcMain.on('host-online', async ()=>{
+function toUrlString(conn) {
+  // v1 SDK: Listener-Objekt hat meist .url() oder .url
+  if (typeof conn === 'string') return conn;
+  if (conn && typeof conn.url === 'function') return conn.url();
+  if (conn && typeof conn.url === 'string') return conn.url;
+  return String(conn); // Fallback (vermeiden, aber crasht nicht)
+}
+
+ipcMain.on('host-online', async () => {
   try {
     const dir = await ensureBundle();
     startServer(dir);
-    await waitReady("http://127.0.0.1:5050");
-    status("Starte ngrok …");
-    if (process.env.NGROK_AUTHTOKEN) await ngrok.authtoken(process.env.NGROK_AUTHTOKEN);
-    ngrokUrl = await ngrok.connect({ addr: 5050, proto: 'http' });
-    emit('public-url', ngrokUrl);
-    status("Online bereit.");
-    emit('open-url', "http://127.0.0.1:5050");
-  } catch (e) { err(e); }
+    await waitReady('http://127.0.0.1:5050');
+
+    const tok = await getNgrokToken();
+    status('Starte ngrok …');
+
+    // je nach SDK: connect / forward
+    const conn = await ngrok.connect({
+      addr: 5050,
+      proto: 'http',
+      authtoken: tok,
+      // region: 'eu'
+    });
+
+    const publicUrl = toUrlString(conn);
+    emit('public-url', publicUrl);     // z.B. Box mit Link
+    emit('open-url', publicUrl);       // iFrame lädt diese URL
+    status('Online bereit.');
+  } catch (e) {
+    console.error('[ngrok]', e);
+    err(e);
+  }
 });
+

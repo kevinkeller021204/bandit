@@ -1,6 +1,6 @@
 {
   "name": "bandit-desktop",
-  "version": "1.0.0",
+  "version": "1.1.125",
   "private": true,
   "main": "main.js",
   "type": "module",
@@ -8,24 +8,33 @@
     "start": "electron .",
     "build": "electron-builder"
   },
-"dependencies": {
-  "adm-zip": "^0.5.10",
-  "cross-fetch": "^4.0.0",
-  "keytar": "^7.9.0",
-  "ngrok": "^4.3.3",
-  "open": "^10.1.0"
-},
-"devDependencies": {
-  "electron": "^30.0.0",
-  "electron-builder": "^24.6.4"
-}
-,
+  "dependencies": {
+    "@ngrok/ngrok": "^1.5.2",
+    "adm-zip": "^0.5.10",
+    "cross-fetch": "^4.0.0",
+    "keytar": "^7.9.0",
+    "qrcode": "^1.5.3",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.6.4"
+  },
   "build": {
     "appId": "com.yourorg.bandit",
     "productName": "Bandit App",
-    "files": ["**/*"],
-    "mac": { "category": "public.app-category.education" },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "files": [
+      "**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.education"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
+  
 }
