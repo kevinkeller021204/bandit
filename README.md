@@ -1,2 +1,5 @@
 # bandit
-programmierprojekt_guericke
+Download Links:
+<!-- DOWNLOADS:START -->
+<!-- DOWNLOADS:END -->
+
