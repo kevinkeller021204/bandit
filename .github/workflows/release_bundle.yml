@@ -107,7 +107,23 @@ jobs:
         run: |
           npm install
 
-      # 🔐 Force unsigned mac build (prevent codesign/notarize)
+      # 🔧 (Windows) Global alle Signing-Env-Variablen deaktivieren
+      - name: Disable Windows code-sign env
+        if: steps.find-electron.outputs.dir != '' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          # Laufenden Prozess bereinigen
+          Remove-Item Env:WIN_CSC_LINK -ErrorAction SilentlyContinue
+          Remove-Item Env:WIN_CSC_KEY_PASSWORD -ErrorAction SilentlyContinue
+          Remove-Item Env:CSC_LINK -ErrorAction SilentlyContinue
+          Remove-Item Env:CSC_KEY_PASSWORD -ErrorAction SilentlyContinue
+          # Für alle folgenden Steps im Job auch global leeren
+          "WIN_CSC_LINK=" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "WIN_CSC_KEY_PASSWORD=" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CSC_LINK=" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CSC_KEY_PASSWORD=" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # 🔐 (macOS) Force unsigned build (prevent codesign/notarize)
       - name: Force unsigned mac build (electron-builder)
         if: steps.find-electron.outputs.dir != '' && runner.os == 'macOS'
         working-directory: ${{ steps.find-electron.outputs.dir }}
@@ -125,7 +141,6 @@ jobs:
           APPLE_ID: ""
           APPLE_APP_SPECIFIC_PASSWORD: ""
           APPLE_TEAM_ID: ""
-          # 👇 wichtig für Windows: verhindert den WIN_CSC_LINK-Fehler
           WIN_CSC_LINK: ""
           WIN_CSC_KEY_PASSWORD: ""
         run: |
