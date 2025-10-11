@@ -10,45 +10,9 @@ from quart_cors import cors
 from pydantic import BaseModel, Field, ValidationError
 import os
 import json, zipfile, importlib.util, hashlib, shutil
+import time
+from dataclasses import dataclass
 
-
-
-r'''
-              .7
-            .'/
-           / /
-          / /
-         / /
-        / /
-       / /
-      / /
-     / /         
-    / /          
-  __|/
-,-\__\
-|f-"Y\|
-\()7L/
- cgD                            __ _
- |\(                          .'  Y '>,
-  \ \                        / _   _   \
-   \\\                       )(_) (_)(|}
-    \\\                      {  4A   } /
-     \\\                      \uLuJJ/\l
-      \\\                     |3    p)/
-       \\\___ __________      /nnm_n//
-       c7___-__,__-)\,__)(".  \_>-<_/D
-                  //V     \_"-._.__G G_c__.-__<"/ ( \
-                         <"-._>__-,G_.___)\   \7\
-                        ("-.__.| \"<.__.-" )   \ \
-                        |"-.__"\  |"-.__.-".\   \ \
-                        ("-.__"". \"-.__.-".|    \_\
-                        \"-.__""|!|"-.__.-".)     \ \
-                         "-.__""\_|"-.__.-"./      \ l
-                          ".__""">G>-.__.-">       .--,_
-                              ""  G'''
-
-
-BASE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 def find_frontend_dir():
     candidates = []
 
@@ -138,10 +102,10 @@ class GaussianBanditEnv(BanditEnvBase):
 
 
 
-# ----------------- Algorithms -------------------------- # 
-#                                                         #
-#                                                         #
-#---------------------------------------------------------#
+# ---------------------- Algorithms/Backend --------------------- #
+#                                                                 #
+#                                                                 #
+#-----------------------------------------------------------------#
 
 class AlgorithmBase:
 
@@ -273,7 +237,48 @@ class RunRequest(BaseModel):
     iterations: int = Field(ge=1, le=50_000)
     algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"])
     seed: Optional[int] = None
-    custom_algorithms: Optional[List[str]] = None  # NEW
+    custom_algorithms: Optional[List[str]] = None
+
+class PlayStartReq(BaseModel):
+    env: EnvType
+    n_actions: int = Field(ge=2, le=100)
+    iterations: int = Field(ge=1, le=50_000)
+    seed: Optional[int] = None
+
+class PlayStepReq(BaseModel):
+    session_id: str
+    action: int = Field(ge=0)
+
+class PlaySessionReq(BaseModel):
+    session_id: str
+
+class PlotReq(BaseModel):
+    session_id: str
+    algorithms: List[str] = Field(default_factory=list)
+    custom_algorithms: Optional[List[str]] = None
+    iterations: Optional[int] = None  # default: use session.iterations
+
+class PlayResetReq(BaseModel):
+    session_id: str
+
+@dataclass
+class PlaySession:
+    id: str
+    env: BanditEnvBase  # fixed env instance with p / means, stds
+    iterations: int
+    t: int
+    history: list[dict]  # [{t, action, reward, accepted?}]
+    last_access: float
+    seed: Optional[int] = None
+
+PLAY: dict[str, PlaySession] = {}
+PLAY_TTL = 30 * 60  # 30 minutes
+
+def _gc(now: float | None = None):
+    now = now or time.time()
+    dead = [sid for sid, s in PLAY.items() if now - s.last_access > PLAY_TTL]
+    for sid in dead:
+        PLAY.pop(sid, None)
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -390,83 +395,177 @@ async def health():
     return jsonify({"ok": True, "service": "epic-k-armed-bandit", "version": 1})
 
 
-@app.post("/api/run")
-async def run_experiment():
+@app.post("/api/play/start")
+async def api_play_start():
+    payload = await request.get_json() or {}
     try:
-        payload = await request.get_json() or {}
-        cfg = RunRequest(**payload)
+        req = PlayStartReq(**payload)
+    except ValidationError as e:
+        return jsonify({"error": "invalid payload", "detail": json.loads(e.json())}), 400
+
+    env = make_env(req.env, req.n_actions, req.seed)
+    sid = uuid.uuid4().hex
+    PLAY[sid] = PlaySession(
+        id=sid, env=env, iterations=req.iterations, t=0, history=[], last_access=time.time(), seed=req.seed
+    )
+    _gc()
+    return jsonify({"session_id": sid, "env": env.info(), "t": 0, "iterations": req.iterations})
+
+@app.post("/api/play/step")
+async def api_play_step():
+    payload = await request.get_json() or {}
+    try:
+        req = PlayStepReq(**payload)
+    except ValidationError as e:
+        return jsonify({"error": "invalid payload", "detail": json.loads(e.json())}), 400
+
+    s = PLAY.get(req.session_id)
+    if not s:
+        return jsonify({"error": "invalid session"}), 404
+    if req.action < 0 or req.action >= s.env.n_actions:
+        return jsonify({"error": "action out of range"}), 400
+    if s.t >= s.iterations:
+        return jsonify({"t": s.t, "done": True}), 200
+
+    r = s.env.step(int(req.action))
+    s.t += 1
+    s.last_access = time.time()
+    ev = {"t": s.t, "action": int(req.action), "reward": float(r)}
+    if s.env.info().get("type") == "bernoulli":
+        ev["accepted"] = bool(r >= 1.0)
+    s.history.append(ev)
+    return jsonify({**ev, "done": s.t >= s.iterations})
+
+@app.get("/api/play/log")
+async def api_play_log():
+    session_id = request.args.get("session_id") or ""
+    s = PLAY.get(session_id)
+    if not s:
+        return jsonify({"error": "invalid session"}), 404
+    s.last_access = time.time()
+    return jsonify({"t": s.t, "iterations": s.iterations, "history": s.history, "env": s.env.info()})
+
+@app.post("/api/play/end")
+async def api_play_end():
+    payload = await request.get_json() or {}
+    try:
+        req = PlaySessionReq(**payload)
     except ValidationError:
-        cfg = RunRequest(env="bernoulli", n_actions=5, iterations=50, algorithms=[])
+        return jsonify({"error": "invalid payload"}), 400
+    ok = PLAY.pop(req.session_id, None) is not None
+    _gc()
+    return jsonify({"ok": ok})
 
-    env = make_env(cfg.env, cfg.n_actions, cfg.seed)
+@app.post("/api/play/reset")
+async def api_play_reset():
+    payload = await request.get_json() or {}
+    try:
+        req = PlayResetReq(**payload)
+    except ValidationError:
+        return jsonify({"error": "invalid payload"}), 400
 
-    # Build algorithm set: built-ins + custom uploads
-    builtins: Dict[str, AlgorithmBase] = {
-        key: ALGOS[key](cfg.n_actions, seed=cfg.seed)
-        for key in (cfg.algorithms or [])
-        if key in ALGOS
-    }
+    s = PLAY.get(req.session_id)
+    if not s:
+        return jsonify({"error": "invalid session"}), 404
+
+    # keep the same environment; just clear progress
+    s.t = 0
+    s.history = []
+    s.last_access = time.time()
+    return jsonify({"ok": True, "t": 0})
+
+@app.post("/api/plot")
+async def api_plot():
+    payload = await request.get_json() or {}
+    try:
+        req = PlotReq(**payload)
+    except ValidationError as e:
+        return jsonify({"error": "invalid payload", "detail": json.loads(e.json())}), 400
+
+    s = PLAY.get(req.session_id)
+    if not s:
+        return jsonify({"error": "invalid session"}), 404
+
+    # --- Rebuild env with the *same parameters* but a deterministic RNG ---
+    env_info = s.env.info()
+    n_actions = int(env_info["n_actions"])
+    env_type = env_info.get("type")
+    seed = s.seed                         # ★ use the session's seed (may be None)
+
+    if env_type == "bernoulli":
+        env = BernoulliBanditEnv(n_actions, seed=seed)  # deterministic draws
+        env.p = list(env_info["p"])                     # fixed probs from session
+    else:
+        env = GaussianBanditEnv(n_actions, seed=seed)   # deterministic draws
+        env.means = list(env_info["means"])
+        env.stds  = list(env_info["stds"])
+
+    iterations = int(req.iterations or s.iterations)
+
+    # --- Build algorithm set (built-ins + custom), seeded like /api/run ---
+    builtins: Dict[str, AlgorithmBase] = {}
+    errors: list[str] = []
+
+    for key in (req.algorithms or []):
+        if key not in ALGOS:
+            errors.append(f"unknown algorithm '{key}' skipped")
+            continue
+        try:
+            builtins[key] = ALGOS[key](n_actions, seed=seed)   # ★ seed parity
+        except Exception as e:
+            errors.append(f"init '{key}' failed: {e}")
 
     customs: Dict[str, AlgorithmBase] = {}
-    if getattr(cfg, "custom_algorithms", None):
-        for aid in cfg.custom_algorithms:
+    if req.custom_algorithms:
+        for aid in req.custom_algorithms:
             meta = _load_meta(aid)
             if not meta:
+                errors.append(f"custom id '{aid}' not found")
                 continue
             module_path = os.path.join(ALGO_DIR, aid, meta.get("module", "main.py"))
+            entry_name = meta.get("entry", "run")
             try:
-                entry_fn = _import_callable(module_path, meta.get("entry", "run"))
+                entry_fn = _import_callable(module_path, entry_name)
             except Exception as e:
-                # skip broken custom algo but keep running others
-                print(f"[custom:{aid}] load failed: {e}", file=sys.stderr)
+                errors.append(f"[custom:{aid}] load '{entry_name}' failed: {e}")
                 continue
+
             label = f"custom:{meta.get('name', aid)}"
-            customs[label] = CustomAlgoWrapper(cfg.n_actions, cfg.seed, entry_fn)
+            try:
+                customs[label] = CustomAlgoWrapper(n_actions, seed, entry_fn)  # ★ seed parity
+            except Exception as e:
+                errors.append(f"[custom:{aid}] wrapper failed: {e}")
 
     algs: Dict[str, AlgorithmBase] = {**builtins, **customs}
 
-    #line stays at zero when user picks no algorithm
+    # --- No algos selected → consistent empty trace (same as /api/run) ---
     if not algs:
-        iterations = cfg.iterations
-        traces = {
-            "empty_trace": {
-                "actions": list(range(iterations)),
-                "rewards": [0.0] * iterations
-            }
-        }
-        summary = {
-            "empty_trace": {
-                "mean_reward": 0.0,
-                "final_avg_reward": 0.0
-            }
-        }
-        return jsonify({
-            "env": env.info(),
-            "iterations": iterations,
-            "traces": traces,
-            "summary": summary
-        })
+        traces = {"empty_trace": {"actions": list(range(iterations)), "rewards": [0.0] * iterations}}
+        summary = {"empty_trace": {"mean_reward": 0.0, "final_avg_reward": 0.0}}
+        resp = {"env": env_info, "iterations": iterations, "traces": traces, "summary": summary}
+        if errors:
+            resp["warnings"] = errors
+        return jsonify(resp)
 
-    traces: Dict[str, Dict[str, list]] = {
-        name: {"rewards": [], "actions": []} for name in algs.keys()
-    }
-
-    for t in range(cfg.iterations):
+    # --- Run batch ---
+    traces: Dict[str, Dict[str, list]] = {name: {"rewards": [], "actions": []} for name in algs.keys()}
+    for t in range(iterations):
         for name, algo in algs.items():
             try:
                 a = algo.select_action()
                 r = env.step(a)
                 algo.update(a, r)
             except Exception as e:
-                # if an algo errors mid-run, record a safe fallback and continue
                 print(f"[algo {name}] t={t} error: {e}", file=sys.stderr)
+                errors.append(f"[algo {name}] t={t} error: {e}")
                 a, r = 0, 0.0
-            traces[name]["actions"].append(a)
-            traces[name]["rewards"].append(r)
+            traces[name]["actions"].append(int(a))
+            traces[name]["rewards"].append(float(r))
 
+    # --- Summary identical to /api/run ---
     summary: Dict[str, dict] = {}
-    for name, data in traces.items():
-        rewards = data["rewards"]
+    for name, data_ in traces.items():
+        rewards = data_["rewards"]
         if rewards:
             cum = 0.0
             last_avg = 0.0
@@ -478,13 +577,12 @@ async def run_experiment():
             mean = last_avg = 0.0
         summary[name] = {"mean_reward": mean, "final_avg_reward": last_avg}
 
-    return jsonify({
-        "env": env.info(),
-        "iterations": cfg.iterations,
-        "traces": traces,
-        "summary": summary,
-    })
-    
+    resp = {"env": env_info, "iterations": iterations, "traces": traces, "summary": summary}
+    if errors:
+        resp["warnings"] = errors        # ★ optional field: visible in Network tab
+    return jsonify(resp)
+
+
 @app.post("/api/algorithms")
 async def api_upload_algorithm():
     """
