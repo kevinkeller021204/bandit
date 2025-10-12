@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
-import type { RunConfig, EnvType, UploadedAlgorithm } from '@/types'
-import { listAlgorithms } from '@/api'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import type { RunConfig, EnvType, UploadedAlgorithm, RunResponse } from '@/types'
+import { listAlgorithms, playStart, plotFromSession } from '@/api'
 import CustomAlgoUpload from './CustomAlgoUpload'
 
 const ALL_ALGOS = [
-  { key: 'greedy',          label: 'Greedy (min)' },
-  { key: 'epsilon_greedy',  label: 'Epsilon-Greedy (min)' },
-  { key: 'ucb1',            label: 'UCB1 (adv)' },
-  { key: 'thompson',        label: 'Thompson Sampling (adv)' },
+  { key: 'greedy', label: 'Greedy (min)' },
+  { key: 'epsilon_greedy', label: 'Epsilon-Greedy (min)' },
+  { key: 'ucb1', label: 'UCB1 (adv)' },
+  { key: 'thompson', label: 'Thompson Sampling (adv)' },
 ]
 
 const ALGO_INFO_HTML: Record<string, string> = {
@@ -49,12 +49,28 @@ const ALGO_INFO_HTML: Record<string, string> = {
 };
 
 
-export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void; disabled?: boolean }) {
+type ControlsProps = {
+  disabled?: boolean
+  onLoadingChange?: (loading: boolean) => void
+  onPlotDone: (resp: RunResponse) => void
+  onPlayStarted?: (ctx: {                // ★ NEW
+    sessionId: string
+    env: any
+    iterations: number
+  }) => void
+}
+
+export function Controls({
+  disabled,
+  onPlotDone,
+  onPlayStarted,
+}: ControlsProps) {
   const [env, setEnv] = useState<EnvType>('bernoulli')
   const [nActions, setNActions] = useState(10)
   const [iterations, setIterations] = useState(1000)
   const [seed, setSeed] = useState<number | ''>('' as any)
   const [openInfo, setOpenInfo] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null)
 
   // built-ins
   const [algos, setAlgos] = useState<string[]>(['greedy', 'epsilon_greedy'])
@@ -62,7 +78,7 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
   const [uploaded, setUploaded] = useState<UploadedAlgorithm[]>([])
   const [selectedCustom, setSelectedCustom] = useState<string[]>([])
 
-  useEffect(() => { listAlgorithms().then(setUploaded).catch(() => {}) }, [])
+  useEffect(() => { listAlgorithms().then(setUploaded).catch(() => { }) }, [])
 
   function toggleAlgo(key: string) {
     setAlgos(s => s.includes(key) ? s.filter(x => x !== key) : [...s, key])
@@ -76,8 +92,8 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
     setSelectedCustom(prev => prev.includes(a.id) ? prev : [a.id, ...prev])
   }
 
-  function run() {
-    const cfg: RunConfig = {
+  function buildCfg(): RunConfig {
+    return {
       env,
       n_actions: nActions,
       iterations,
@@ -85,88 +101,129 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
       custom_algorithms: selectedCustom.length ? selectedCustom : undefined,
       seed: seed === '' ? undefined : Number(seed),
     }
-    onRun(cfg)
+  }
+
+  async function onPlay() {           // ★ start interactive session
+    const cfg = buildCfg()
+    const s = await playStart({ env: cfg.env, n_actions: cfg.n_actions, iterations: cfg.iterations, seed: cfg.seed })
+    setSessionId(s.session_id)
+    onPlayStarted?.({                      // ★ tell parent immediately
+      sessionId: s.session_id,
+      env: s.env,                          // contains type + params
+      iterations: s.iterations
+    })
+  }
+
+  async function onPlot() {           // ★ compute charts from the active session
+    if (!sessionId) return
+    const cfg = buildCfg()
+    const resp = await plotFromSession({
+      session_id: sessionId,
+      algorithms: cfg.algorithms,
+      custom_algorithms: cfg.custom_algorithms,
+      iterations: cfg.iterations,
+    })
+    onPlotDone(resp)               // renders Results with charts
   }
 
   function toggleInfo(key: string) {
-  setOpenInfo(prev => (prev === key ? null : key));
-}
+    setOpenInfo(prev => (prev === key ? null : key));
+  }
 
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <div className="text-lg font-semibold">Configuration</div>
-        <p className="text-sm text-zinc-600">Define environment and algorithms.</p>
+      <div className="space-y-1 flex flex-wrap items-center">
+        <div className="text-lg font-semibold p-2">Pizzeria Setup</div>
+        <button
+          type="button"
+          className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
+          title="Erklärung anzeigen"
+          onClick={() => toggleInfo("pizza-topping-bandit")}
+          aria-expanded={openInfo === "pizza-topping-bandit"}
+          aria-controls={`algo-info-${"pizza-topping-bandit"}`}
+        >
+          ?
+        </button>
+        {openInfo === "pizza-topping-bandit" && (
+          <div
+            id={`algo-info-${"pizza-topping-bandit"}`}
+            className="mt-2 rounded bg-zinc-50 p-3 text-sm basis-full"
+            dangerouslySetInnerHTML={{
+              __html: `<p className="text-sm text-zinc-600"> Choose how many <strong>topping options</strong> you offer and which <strong>recommendation strategies</strong> to try.</p>`,
+            }}
+          />
+        )}
+        {/*  */}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <div className="label mb-1">Bandit Type</div>
+          <div className="label mb-1">Bandit</div>
           <select value={env} onChange={e => setEnv(e.target.value as EnvType)} className="input w-full">
             <option value="bernoulli">Bernoulli</option>
             <option value="gaussian">Gaussian</option>
           </select>
         </div>
         <div>
-          <div className="label mb-1">Number of Actions</div>
+          <div className="label mb-1">Toppings</div>
           <input type="number" className="input w-full" value={nActions} min={2} max={100}
-                 onChange={e => setNActions(Number(e.target.value))} />
+            onChange={e => setNActions(Number(e.target.value))} />
         </div>
         <div>
-          <div className="label mb-1">Iterations</div>
+          <div className="label mb-1">Customers</div>
           <input type="number" className="input w-full" value={iterations} min={1} max={50000}
-                 onChange={e => setIterations(Number(e.target.value))} />
+            onChange={e => setIterations(Number(e.target.value))} />
         </div>
         <div>
-          <div className="label mb-1">Seed (optional)</div>
+          <div className="label mb-1">Random Seed</div>
           <input type="number" className="input w-full" value={seed}
-                 onChange={e => setSeed(e.target.value === '' ? '' : Number(e.target.value))} />
+            onChange={e => setSeed(e.target.value === '' ? '' : Number(e.target.value))} />
         </div>
       </div>
 
       {/* One unified list */}
       <div>
-        <div className="label mb-2">Algorithms</div>
+        <div className="label mb-2">Algorithmen</div>
         <div className="grid grid-cols-1 gap-2">
           {/* built-ins */}
-{ALL_ALGOS.map(a => (
-  <div key={a.key} className="rounded border border-zinc-200 p-2">
-    <div className="flex items-center justify-between gap-3">
-      <label className="flex items-center gap-3">
-        <input
-          type="checkbox"
-          checked={algos.includes(a.key)}
-          onChange={() => toggleAlgo(a.key)}
-        />
-        <span>{a.label}</span>
-      </label>
+          {ALL_ALGOS.map(a => (
+            <div key={a.key} className="rounded border border-zinc-200 p-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={algos.includes(a.key)}
+                    onChange={() => toggleAlgo(a.key)}
+                  />
+                  <span>{a.label}</span>
+                </label>
 
-      {/* ?-Button rechts */}
-      <button
-        type="button"
-        className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
-        title="Erklärung anzeigen"
-        onClick={() => toggleInfo(a.key)}
-        aria-expanded={openInfo === a.key}
-        aria-controls={`algo-info-${a.key}`}
-      >
-        ?
-      </button>
-    </div>
+                {/* ?-Button rechts */}
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
+                  title="Erklärung anzeigen"
+                  onClick={() => toggleInfo(a.key)}
+                  aria-expanded={openInfo === a.key}
+                  aria-controls={`algo-info-${a.key}`}
+                >
+                  ?
+                </button>
+              </div>
 
-    {/* Ausklappbarer Bereich */}
-    {openInfo === a.key && (
-      <div
-        id={`algo-info-${a.key}`}
-        className="mt-2 rounded bg-zinc-50 p-3 text-sm"
-        dangerouslySetInnerHTML={{
-          __html: ALGO_INFO_HTML[a.key] || '<em>Keine Beschreibung verfügbar.</em>',
-        }}
-      />
-    )}
-  </div>
-))}
+              {/* Ausklappbarer Bereich */}
+              {openInfo === a.key && (
+                <div
+                  id={`algo-info-${a.key}`}
+                  className="mt-2 rounded bg-zinc-50 p-3 text-sm"
+                  dangerouslySetInnerHTML={{
+                    __html: ALGO_INFO_HTML[a.key] || '<em>Keine Beschreibung verfügbar.</em>',
+                  }}
+                />
+              )}
+            </div>
+          ))}
 
 
           {/* uploaded section appears automatically after the first upload */}
@@ -192,12 +249,14 @@ export function Controls({ onRun, disabled }: { onRun: (cfg: RunConfig) => void;
         </div>
       </div>
 
+      {/* RUN SECTION */}
       <div className="space-y-3">
-        <div className="label">Execute simulation</div>
-        <button className="btn" onClick={run} disabled={disabled}>Run</button>
+        <div className="label">Kunden bedienen</div> {/* CHANGED (was: Execute simulation) */}
+        <div className="flex gap-2">
+          <button className="btn" onClick={onPlay}>Spielen</button>
+          <button className="btn" onClick={onPlot} disabled={disabled}>Plot</button> {/* CHANGED label */}
+        </div>
       </div>
-
-
     </div>
   )
 }
