@@ -1,11 +1,14 @@
+// src/Results.tsx
 import { useRef } from 'react'
 import type { RunResponse } from '@/types'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { exportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './exportChart'
+import { useI18n } from '../language/LanguageContext'
 
 export function Results({ data, loading }: { data: RunResponse | null, loading: boolean }) {
-  if (loading) return <div className="text-zinc-600">Running…</div>
-  if (!data) return <div className="text-zinc-600">No run yet.</div>
+  const { t } = useI18n()
+  if (loading) return <div className="text-zinc-600">{t('res.running')}</div>
+  if (!data)  return <div className="text-zinc-600">{t('res.empty')}</div>
 
   const algoColors: Record<string, string> = {
     greedy: "blue",
@@ -71,18 +74,18 @@ export function Results({ data, loading }: { data: RunResponse | null, loading: 
   return (
     <div className="space-y-8">
       <div className="space-y-1">
-        <div className="text-lg font-semibold">Environment Feedback</div>
+        <div className="text-lg font-semibold">{t('res.envTitle')}</div>
         <div className="text-sm text-zinc-600">
-          Type: <span className="font-medium">{data.env.type}</span> • Actions: <span className="font-medium">{data.env.n_actions}</span> • Iterations: <span className="font-medium">{len}</span>
+          {t('res.type')}: <span className="font-medium">{data.env.type}</span> • {t('res.actions')}: <span className="font-medium">{data.env.n_actions}</span> • {t('res.iters')}: <span className="font-medium">{len}</span>
         </div>
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <div className="label">Average Reward over Time</div>
+          <div className="label">{t('res.avgReward')}</div>
           <div className="flex gap-2">
-            <button className="btn-subtle" onClick={exportLinePNG} title="Download PNG (1920×1080)">PNG</button>
-            <button className="btn-subtle" onClick={exportLineSVG} title="Download SVG">SVG</button>
-            <button className="btn-subtle" onClick={copyLinePNG} title="Copy PNG to clipboard">Copy</button>
+            <button className="btn-subtle" onClick={exportLinePNG} title={t('title.png')}>{t('btn.png')}</button>
+            <button className="btn-subtle" onClick={exportLineSVG} title={t('title.svg')}>{t('btn.svg')}</button>
+            <button className="btn-subtle" onClick={copyLinePNG} title={t('title.copy')}>{t('btn.copy')}</button>
           </div>
         </div>
         <div className="h-64 card" ref={lineRef}>
@@ -103,11 +106,11 @@ export function Results({ data, loading }: { data: RunResponse | null, loading: 
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <div className="label">Action Selection Distribution</div>
+          <div className="label">{t('res.actionDist')}</div>
           <div className="flex gap-2">
-            <button className="btn-subtle" onClick={exportBarPNG} title="Download PNG (1920×1080)">PNG</button>
-            <button className="btn-subtle" onClick={exportBarSVG} title="Download SVG">SVG</button>
-            <button className="btn-subtle" onClick={copyBarPNG} title="Copy PNG to clipboard">Copy</button>
+            <button className="btn-subtle" onClick={exportBarPNG} title={t('title.png')}>{t('btn.png')}</button>
+            <button className="btn-subtle" onClick={exportBarSVG} title={t('title.svg')}>{t('btn.svg')}</button>
+            <button className="btn-subtle" onClick={copyBarPNG} title={t('title.copy')}>{t('btn.copy')}</button>
           </div>
         </div>
         <div className="h-64 card" ref={barRef}>
@@ -127,13 +130,12 @@ export function Results({ data, loading }: { data: RunResponse | null, loading: 
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {keys.map(k => (
           <div key={k} className="card p-4" style={{ borderTop: `4px solid ${algoColors[k] || "black"}` }}>
             <div className="text-sm text-zinc-600">{k}</div>
             <div className="text-2xl font-semibold">{data.summary[k].final_avg_reward.toFixed(3)}</div>
-            <div className="text-xs text-zinc-500">Final average reward</div>
+            <div className="text-xs text-zinc-500">{t('res.finalAvg')}</div>
           </div>
         ))}
       </div>
