@@ -2,19 +2,15 @@
 import { useState } from 'react'
 import { Controls } from './Controls'
 import { Results } from './Results'
-import type { RunResponse } from '@/types'
+import type { PlayCtx, RunResponse } from '@/types'
 import Header from './Header'
 
 export default function App() {
-  const [data, setData] = useState<RunResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [playCtx, setPlayCtx] = useState<{
-    sessionId: string
-    env: any
-    iterations: number
-  } | null>(null)
+  const [playCtx, setPlayCtx] = useState<PlayCtx | null>(null)
+  const [data, setData] = useState<RunResponse | null>(null)
 
-  function handlePlayStarted(ctx: { sessionId: string; env: any; iterations: number }) {
+  function handlePlayStarted(ctx: PlayCtx) {
     setPlayCtx(ctx)
     setData(null)
   }
@@ -29,18 +25,23 @@ export default function App() {
 
       <main className="mx-auto w-4xl p-6 grid gap-6 grid-cols-1 justify-items-center" >
         {/* LEFT: Controls (creates a Play session and later triggers Plot) */}
-        <section className="card card-pad w-2/5 scroll-mt-[72px]"  id="selection">
+        <section className="card card-pad w-2/5 scroll-mt-[72px]" id="selection">
           <Controls
-            disabled={loading}
             onLoadingChange={setLoading}
-            onPlotDone={(resp) => setData(resp)}
             onPlayStarted={handlePlayStarted}
           />
         </section>
 
         {/* RIGHT: Results (renders charts after play or plot) */}
-        <Results data={data} loading={loading} playCtx={playCtx} />
+        <Results
+          data={data}
+          setData={setData}
+          loading={loading}
+          playCtx={playCtx}
+        // setPlayCtx={setPlayCtx} 
+        />
       </main>
+      <a className="p-3 text-gray-400" href="https://www.freepik.com/free-vector/hand-drawn-food-pattern-background_72159777.htm#fromView=search&page=1&position=2&uuid=27d277a2-f9d0-40e0-b811-5c3d50825a1a&query=pizza">Image by pikisuperstar on Freepik</a>
     </div>
   )
 }

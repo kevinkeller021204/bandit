@@ -1,6 +1,6 @@
 // src/components/ManualPlay.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { EnvInfo, RunConfig } from "@/types";
+import type { EnvInfo, PlayCtx } from "@/types";
 import { playLog, playReset, playStep } from "@/api";
 
 export const BASE_TOPPINGS = [
@@ -50,25 +50,29 @@ function sampleNormal(rand: () => number, mean = 0, std = 1) {
   return mean + std * z;
 }
 
-export default function ManualPlay({
-  cfg,
-  sessionId,
-  mode = "auto",
-  onClose,
-  onEvent,                  
-  onSync,                   
-}: {
-  cfg: RunConfig;
-  sessionId?: string;
+type ManualPlayProps = {
+  playCtx: PlayCtx
   mode?: "auto" | "backend" | "local";
   onClose?: () => void;
   onEvent?: (ev: { t: number; action: number; reward: number; accepted?: boolean }) => void; // ★
   onSync?: (hist: Array<{ t: number; action: number; reward: number; accepted?: boolean }>) => void; // ★
-}) {
+}
+
+export default function ManualPlay({
+  playCtx,
+  mode = "auto",
+  onClose,
+  onEvent,
+  onSync,
+}: ManualPlayProps) {
+  const sessionId = playCtx.data.session_id
+  const nActions = playCtx.n_actions
+  const env = playCtx.data.env
+  const seed = (playCtx.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0;
   const useBackend = (mode === "backend") || (mode === "auto" && !!sessionId);
 
   const [backendEnv, setBackendEnv] = useState<EnvInfo | null>(null);
-  const [iterations, setIterations] = useState<number>(cfg.iterations ?? 1000);
+  const [iterations, setIterations] = useState<number>(playCtx.data.iterations ?? 1000);
   const [t, setT] = useState<number>(1);
   const [log, setLog] = useState<{ t: number; a: number; r: number; ok?: boolean }[]>([]);
   const [last, setLast] = useState<{ t: number; a: number; r: number; ok?: boolean } | null>(null);
@@ -116,18 +120,17 @@ export default function ManualPlay({
   }, [sessionId]);
 
   // Fallback local env
-  const N = backendEnv?.n_actions ?? cfg.n_actions;
+  const N = backendEnv?.n_actions ?? nActions;
   const toppings = useMemo(() => buildToppings(N), [N]);
   const T = iterations;
-  const seed = (cfg.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0;
   const rand = useMemo(() => mulberry32(seed), [seed]);
   const localEnv = useMemo(() => {
     if (useBackend && backendEnv) return null;
-    if (cfg.env === "bernoulli") {
+    if (env.type === "bernoulli") {
       return { kind: "bernoulli" as const, probs: Array.from({ length: N }, () => 0.25 + rand() * 0.65) };
     }
     return { kind: "gaussian" as const, means: Array.from({ length: N }, () => 0.3 + rand() * 1.0), std: 0.25 };
-  }, [useBackend, backendEnv, cfg.env, N, rand]);
+  }, [useBackend, backendEnv, env, N, rand]);
 
   async function pick(a: number) {
     if (t > T) return;
@@ -194,8 +197,12 @@ export default function ManualPlay({
     }
   }
 
+  function resetHard() {
+
+  }
+
   const envKind: "bernoulli" | "gaussian" =
-    backendEnv?.type ?? (localEnv?.kind ?? (cfg.env as "bernoulli" | "gaussian"));
+    backendEnv?.type ?? (localEnv?.kind ?? (env.type as "bernoulli" | "gaussian"));
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -209,7 +216,8 @@ export default function ManualPlay({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-zinc-600">Customer {Math.min(t, T)} / {T}</span>
-          <button className="btn" onClick={reset} disabled={loading}>Reset</button>
+          <button className="btn" onClick={reset} disabled={loading}>Reset Input</button>
+          <button className="btn" onClick={resetHard} disabled={loading}>Reset Session</button>
           {onClose && <button className="btn" onClick={onClose}>Close</button>}
         </div>
       </div>

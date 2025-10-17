@@ -1,7 +1,9 @@
-import { Dispatch, SetStateAction, useEffect, useState } from 'react'
-import type { RunConfig, EnvType, UploadedAlgorithm, RunResponse } from '@/types'
-import { listAlgorithms, playStart, plotFromSession } from '@/api'
+import { useEffect, useState } from 'react'
+import type { EnvType, UploadedAlgorithm, PlayCtx, RunConfig } from '@/types'
+import { listAlgorithms, playStart } from '@/api'
 import CustomAlgoUpload from './CustomAlgoUpload'
+import { NumberStepper } from './NumberStepper'
+import { SelectField, Option } from './SelectField'
 
 const ALL_ALGOS = [
   { key: 'greedy', label: 'Greedy (min)' },
@@ -50,25 +52,17 @@ const ALGO_INFO_HTML: Record<string, string> = {
 
 
 type ControlsProps = {
-  disabled?: boolean
   onLoadingChange?: (loading: boolean) => void
-  onPlotDone: (resp: RunResponse) => void
-  onPlayStarted?: (ctx: {                // ★ NEW
-    sessionId: string
-    env: any
-    iterations: number
-  }) => void
+  onPlayStarted?: (playCtx: PlayCtx) => void
 }
 
 export function Controls({
-  disabled,
-  onPlotDone,
   onPlayStarted,
 }: ControlsProps) {
   const [env, setEnv] = useState<EnvType>('bernoulli')
   const [nActions, setNActions] = useState(10)
-  const [iterations, setIterations] = useState(1000)
-  const [seed, setSeed] = useState<number | ''>('' as any)
+  const [iterations, setIterations] = useState(50)
+  const [seed, setSeed] = useState<number>()
   const [openInfo, setOpenInfo] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null)
 
@@ -92,47 +86,39 @@ export function Controls({
     setSelectedCustom(prev => prev.includes(a.id) ? prev : [a.id, ...prev])
   }
 
-  function buildCfg(): RunConfig {
+  function buildRunConfig(): RunConfig {
     return {
       env,
       n_actions: nActions,
       iterations,
       algorithms: algos,
       custom_algorithms: selectedCustom.length ? selectedCustom : undefined,
-      seed: seed === '' ? undefined : Number(seed),
+      seed: seed,
     }
   }
 
-  async function onPlay() {           // ★ start interactive session
-    const cfg = buildCfg()
+  async function onPlay() {
+    const cfg = buildRunConfig()
     const s = await playStart({ env: cfg.env, n_actions: cfg.n_actions, iterations: cfg.iterations, seed: cfg.seed })
     setSessionId(s.session_id)
-    onPlayStarted?.({                      // ★ tell parent immediately
-      sessionId: s.session_id,
-      env: s.env,                          // contains type + params
-      iterations: s.iterations
+    onPlayStarted?.({
+      algorithms: algos,
+      n_actions: nActions,
+      data: s
     })
-  }
-
-  async function onPlot() {           // ★ compute charts from the active session
-    if (!sessionId) return
-    const cfg = buildCfg()
-    const resp = await plotFromSession({
-      session_id: sessionId,
-      algorithms: cfg.algorithms,
-      custom_algorithms: cfg.custom_algorithms,
-      iterations: cfg.iterations,
-    })
-    onPlotDone(resp)               // renders Results with charts
   }
 
   function toggleInfo(key: string) {
     setOpenInfo(prev => (prev === key ? null : key));
   }
 
+  const banditOptions: Option[] = [
+    { label: "Bernoulli", value: "bernoulli" },
+    { label: "Gaussian", value: "gaussian" },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-1xl">
       <div className="space-y-1 flex flex-wrap items-center">
         <div className="text-lg font-semibold p-2">Pizzeria Setup</div>
         <button
@@ -158,27 +144,47 @@ export function Controls({
       </div>
 
       <div className="grid grid-cols-1 gap-4">
+        <SelectField<EnvType>
+          label="Bandit"
+          id="bandit"
+          value={env}
+          onChange={setEnv}
+          options={banditOptions}
+          required
+        />
         <div>
-          <div className="label mb-1 pr-3">Bandit</div>
-          <select value={env} onChange={e => setEnv(e.target.value as EnvType)} className="input w-full">
-            <option value="bernoulli">Bernoulli</option>
-            <option value="gaussian">Gaussian</option>
-          </select>
+          <NumberStepper
+            label="Toppings"
+            id="toppings"
+            value={nActions}
+            onChange={setNActions}
+            min={0}
+            max={100}
+            step={1}
+          />
         </div>
         <div>
-          <div className="label mb-1">Toppings</div>
-          <input type="number" className="input w-full" value={nActions} min={2} max={100}
-            onChange={e => setNActions(Number(e.target.value))} />
+          <NumberStepper
+            label="Customers"
+            id="customers"
+            value={iterations}
+            onChange={setIterations}
+            min={0}
+            max={10000}
+            step={1}
+          />
         </div>
         <div>
-          <div className="label mb-1">Customers</div>
-          <input type="number" className="input w-full" value={iterations} min={1} max={50000}
-            onChange={e => setIterations(Number(e.target.value))} />
-        </div>
-        <div>
-          <div className="label mb-1">Random Seed</div>
-          <input type="number" className="input w-full" value={seed}
-            onChange={e => setSeed(e.target.value === '' ? '' : Number(e.target.value))} />
+          <NumberStepper
+            label="Random Seed"
+            id="customers"
+            value={seed}
+            onChange={setSeed}
+            min={0}
+            max={10000}
+            step={1}
+            required={false}
+          />
         </div>
       </div>
 
@@ -225,10 +231,9 @@ export function Controls({
             </div>
           ))}
 
-
           {/* uploaded section appears automatically after the first upload */}
           {uploaded.length > 0 && (
-            <>
+            <div className="rounded border border-zinc-200 p-2">
               {uploaded.map(a => (
                 <label key={a.id} className="flex items-center gap-3">
                   <input
@@ -236,25 +241,24 @@ export function Controls({
                     checked={selectedCustom.includes(a.id)}
                     onChange={() => toggleCustom(a.id)}
                   />
-                  <span>{a.name} <span className="text-xs text-zinc-500">(custom, entry: {a.entry})</span></span>
+                  <span>{a.name}</span>
                 </label>
               ))}
-            </>
+            </div>
           )}
-
-          {/* inline uploader; once uploaded, its checkbox will appear above */}
-          <div className="mt-2">
-            <CustomAlgoUpload onUploaded={onUploadedAlgo} />
-          </div>
         </div>
+      </div>
+
+      {/* inline uploader; once uploaded, its checkbox will appear above */}
+      <div className="mt-2">
+        <CustomAlgoUpload onUploaded={onUploadedAlgo} />
       </div>
 
       {/* RUN SECTION */}
       <div className="space-y-3">
-        <div className="label">Kunden bedienen</div> {/* CHANGED (was: Execute simulation) */}
-        <div className="flex gap-2">
-          <button className="btn" onClick={onPlay}>Spielen</button>
-          <button className="btn" onClick={onPlot} disabled={disabled}>Plot</button> {/* CHANGED label */}
+        {/* <div className="label">Kunden bedienen</div> CHANGED (was: Execute simulation) */}
+        <div className="flex gap-2 justify-center">
+          <button className="btn-lg" onClick={onPlay}>Kunden bedienen</button>
         </div>
       </div>
     </div>

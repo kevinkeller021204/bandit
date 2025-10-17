@@ -1,46 +1,48 @@
 // src/components/Results.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RunResponse } from '@/types'
+import type { PlayCtx, RunResponse } from '@/types'
 import ManualPlay from './ManualPlay'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { exportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './exportChart'
+import { scrollTo } from '@/utils/nav'
+import { plotFromSession } from '@/api'
 
-type PlayCtx = { sessionId: string; env: any; iterations: number }
 type ManualEv = { t: number; action: number; reward: number; accepted?: boolean }
 type Trace = { actions: number[]; rewards: number[] };
 type Traces = Record<string, Trace>;
 
 export function Results({
-  data,
   loading,
   playCtx,
+  data, 
+  setData
 }: {
-  data: RunResponse | null
   loading: boolean
   playCtx?: PlayCtx | null
+  data: RunResponse | null
+  setData: React.Dispatch<React.SetStateAction<RunResponse | null>>
 }) {
-  // --- manual history managed here (ascending by t) ---
   const [manual, setManual] = useState<ManualEv[]>([])
-  useEffect(() => { setManual([]) }, [playCtx?.sessionId])
-
-  // --- high-level flags (no early returns) ---
-  const hasPlotted = !!data
-  const hasSession = !!playCtx
   const hasManual = manual.length > 0
+
+  useEffect(() => {
+    setManual([])
+    scrollTo("results")
+  }, [playCtx])
 
   // --- env + iterations sourced from whichever we have ---
   const envInfo: any = useMemo(() => {
-    if (hasPlotted) return (data as RunResponse).env
-    if (hasSession) return playCtx!.env
+    if (data) return (data as RunResponse).env
+    if (playCtx) return playCtx!.data.env
     // default to something harmless
     return { n_actions: 0, type: 'bernoulli' }
-  }, [hasPlotted, hasSession, data, playCtx])
+  }, [data, playCtx])
 
   const iterations = useMemo(() => {
-    if (hasPlotted) return (data as RunResponse).iterations
-    if (hasSession) return playCtx!.iterations
+    if (data) return (data as RunResponse).iterations
+    if (playCtx) return playCtx!.data.iterations
     return 0
-  }, [hasPlotted, hasSession, data, playCtx])
+  }, [data, playCtx])
 
   const envType = (envInfo.type as 'bernoulli' | 'gaussian' | undefined) ?? 'bernoulli'
   const isBernoulli = envType === 'bernoulli'
@@ -49,7 +51,7 @@ export function Results({
   // ---- merge traces (algorithms + manual) ----
   const mergedTraces: Traces = useMemo(() => {
     const base: Record<string, { actions: number[]; rewards: number[] }> =
-      hasPlotted ? (data as RunResponse).traces : {}
+      data ? (data as RunResponse).traces : {}
     const manualTrace = hasManual
       ? {
         actions: manual.map(m => m.action),
@@ -57,7 +59,7 @@ export function Results({
       }
       : null
     return { ...base, ...(manualTrace ? { manual: manualTrace } : {}) }
-  }, [hasPlotted, data, hasManual, manual])
+  }, [data, hasManual, manual])
 
   const keys = useMemo(() => Object.keys(mergedTraces), [mergedTraces])
 
@@ -191,8 +193,19 @@ export function Results({
     });
   }, []);
 
+  async function onPlot() {
+    if (!playCtx) return
+    const resp = await plotFromSession({
+      session_id: playCtx.data.session_id,
+      algorithms: playCtx.algorithms,
+      custom_algorithms: playCtx.custom_algorithms,
+      iterations: playCtx.data.iterations,
+    })
+    setData(resp)
+  }
+
   // ---------- RENDER ----------
-  return hasSession && (
+  return playCtx && (
     <section className="card card-pad w-4/5" id="results">
       <div className="grid gap-8 items-start md:grid-cols-2">
         {/* header: spans both columns */}
@@ -206,23 +219,22 @@ export function Results({
           </div>
         </div> */}
 
-       {/* left column: manual tester */}
+        {/* left column: manual tester */}
         <div className="space-y-2">
           <ManualPlay
-            cfg={manualCfg}
-            sessionId={playCtx!.sessionId}
+            playCtx={playCtx}
             mode="backend"
             onSync={handleSync}
             onEvent={handleEvent}
           />
         </div>
         {loading && <div className="text-zinc-600">Running…</div>}
-        {!loading && !hasSession && !hasPlotted && !hasManual && (
+        {!loading && !playCtx && !data && !hasManual && (
           <div className="text-zinc-600">No run yet.</div>
         )}
 
         {/* right column: results */}
-        {hasPlotted && (
+        {data ? (
           <div className="space-y-8">
             {/* LINE CHART*/}
             <div className="space-y-2">
@@ -311,7 +323,7 @@ export function Results({
               </div>
             </div>
           </div>
-        )}
+        ) : <button className="btn" onClick={onPlot} disabled={loading}>Plot</button>}
       </div>
     </section>
   )

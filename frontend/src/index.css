@@ -15,10 +15,17 @@ body,
 
 body {
   @apply font-sans text-zinc-900;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.97)),
+    url("./assets/pizza-background.jpg");
+  background-size: cover;
+  /* or: contain | 150% 150% | 1200px auto */
+  background-position: center;
+  background-repeat: repeat;
 }
 
 .card {
-  @apply bg-panel rounded-2xl shadow-panel border border-zinc-100;
+  @apply bg-panel rounded-2xl border border-zinc-100 shadow-sm shadow-black/30;
 }
 
 .card-pad {
@@ -26,7 +33,13 @@ body {
 }
 
 .btn {
-  @apply inline-flex items-center justify-center rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 active:scale-[0.99] transition;
+  @apply inline-flex items-center justify-center rounded-xl border border-zinc-200 px-4 py-2
+   text-sm font-medium hover:bg-zinc-50 active:scale-[0.99] transition;
+}
+
+.btn-lg {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 px-9 
+  py-4 text-base font-medium hover:bg-zinc-50 active:scale-[0.99] transition shadow-sm shadow-black/30;
 }
 
 .input {
