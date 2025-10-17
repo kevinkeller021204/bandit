@@ -26,6 +26,14 @@ export interface RunConfig {
   seed?: number;
 }
 
+export interface PlayCtx {
+  n_actions: number;
+  algorithms: string[];
+  custom_algorithms?: string[];
+  seed?: number;
+  data: PlayStartResponse
+}
+
 export type Trace = { actions: number[]; rewards: number[] };
 export type Traces = Record<string, Trace>;
 

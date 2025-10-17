@@ -11,6 +11,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      // anything under /api goes to Quart
+      '/api': {
+        target: 'http://localhost:5050', // your Quart port
+        changeOrigin: true,
+      },
+    }
   }
 })

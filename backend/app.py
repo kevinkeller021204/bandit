@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Literal, Optional
 import math
 import sys
-from quart import Quart, jsonify, request, send_from_directory
+from quart import Quart, jsonify, request, send_from_directory, redirect
 from quart_cors import cors
 from pydantic import BaseModel, Field, ValidationError
 import os
@@ -373,11 +373,17 @@ VITE_URL = os.environ.get("VITE_URL", "http://localhost:5173")
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 async def serve_frontend(path: str):
+    # DEV: send browser to Vite dev server (HMR just works)
+    if IS_DEV:
+        # 307 preserves method; safe for GET assets too
+        to = f"{VITE_URL}/{path}" if path else f"{VITE_URL}/"
+        return redirect(to, code=307)
+
+    # PROD: serve your built files from FRONTEND_DIR (unchanged)
     if not FRONTEND_DIR:
         return "Frontend fehlt. Gesucht in _MEIPASS, neben der Binary und neben app.py.", 500
 
     full = os.path.join(FRONTEND_DIR, path)
-
     if path and os.path.isfile(full):
         resp = await send_from_directory(FRONTEND_DIR, path)
         if any(path.endswith(ext) for ext in (

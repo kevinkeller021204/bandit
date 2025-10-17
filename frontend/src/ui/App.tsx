@@ -2,47 +2,46 @@
 import { useState } from 'react'
 import { Controls } from './Controls'
 import { Results } from './Results'
-import type { RunResponse } from '@/types'
+import type { PlayCtx, RunResponse } from '@/types'
+import Header from './Header'
 
 export default function App() {
-  const [data, setData] = useState<RunResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [playCtx, setPlayCtx] = useState<{
-    sessionId: string
-    env: any
-    iterations: number
-  } | null>(null)
+  const [playCtx, setPlayCtx] = useState<PlayCtx | null>(null)
+  const [data, setData] = useState<RunResponse | null>(null)
 
-  function handlePlayStarted(ctx: { sessionId: string; env: any; iterations: number }) {
+  function handlePlayStarted(ctx: PlayCtx) {
     setPlayCtx(ctx)
     setData(null)
   }
 
   return (
     <div className="min-h-full">
-      <header className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-zinc-200">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
-          <div className="text-xl font-semibold tracking-tight">SliceWise 🍕 — Topping-Bandit-Labor</div>
-          <div className="text-xs text-zinc-600">SPA • React • Quart</div>
-        </div>
-      </header>
+      <Header
+        selectionId="selection"
+        resultsId="results"
+        onTranslate={() => console.log("translate clicked")}
+      />
 
-      <main className="mx-auto max-w-6xl p-6 grid gap-6 md:grid-cols-[360px,1fr]">
+      <main className="mx-auto w-4xl p-6 grid gap-6 grid-cols-1 justify-items-center" >
         {/* LEFT: Controls (creates a Play session and later triggers Plot) */}
-        <section className="card card-pad">
+        <section className="card card-pad w-2/5 scroll-mt-[72px]" id="selection">
           <Controls
-            disabled={loading}
-            onLoadingChange={setLoading}          // ★ App owns loading spinner
-            onPlotDone={(resp) => setData(resp)}  // ★ results from /api/plot land here
+            onLoadingChange={setLoading}
             onPlayStarted={handlePlayStarted}
           />
         </section>
 
-        {/* RIGHT: Results (renders charts after Plot) */}
-        <section className="card card-pad">
-          <Results data={data} loading={loading} playCtx={playCtx} />
-        </section>
+        {/* RIGHT: Results (renders charts after play or plot) */}
+        <Results
+          data={data}
+          setData={setData}
+          loading={loading}
+          playCtx={playCtx}
+        // setPlayCtx={setPlayCtx} 
+        />
       </main>
+      {/* <a className="p-3 text-gray-400" href="https://www.freepik.com/free-vector/hand-drawn-food-pattern-background_72159777.htm#fromView=search&page=1&position=2&uuid=27d277a2-f9d0-40e0-b811-5c3d50825a1a&query=pizza">Image by pikisuperstar on Freepik</a> */}
     </div>
   )
 }
