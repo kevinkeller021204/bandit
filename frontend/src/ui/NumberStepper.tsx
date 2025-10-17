@@ -68,16 +68,16 @@ export function NumberStepper({
     const atMax = valueToUse >= max;
 
     return (
-        <div className={`inline-flex flex-col gap-2 ${className}`}>
+        <div className={`flex flex-col gap-2 w-full ${className}`}>
             {label && (
-                <label htmlFor={id} className="block text-sm font-medium text-zinc-700">
+                <label htmlFor={id} className="label">
                     {label}{" "}
                     {required && <span className="text-red-600" aria-hidden="true">*</span>}
                 </label>
             )}
 
             <div
-                className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm"
+                className="flex items-center rounded-xl border border-zinc-200 bg-white p-1 shadow-sm"
                 role="group"
                 aria-label={label}
             >
@@ -94,7 +94,7 @@ export function NumberStepper({
                     }}
                     onPointerUp={() => stopHold("dec")}
                     onPointerCancel={() => stopHold("dec")}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200
+                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-xl border border-zinc-200
                      text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     –
@@ -121,7 +121,7 @@ export function NumberStepper({
                     step={step}
                     disabled={disabled}
                     inputMode="numeric"
-                    className="w-28 text-center text-lg font-semibold tracking-tight
+                    className="w-full text-center text-lg font-semibold tracking-tight
                      bg-transparent outline-none focus:outline-none
                      [appearance:textfield] 
                      [-moz-appearance:textfield]
@@ -142,7 +142,7 @@ export function NumberStepper({
                     }}
                     onPointerUp={() => stopHold("inc")}
                     onPointerCancel={() => stopHold("inc")}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200
+                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-xl border border-zinc-200
                      text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     +

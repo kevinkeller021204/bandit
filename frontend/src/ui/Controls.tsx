@@ -3,7 +3,7 @@ import type { EnvType, UploadedAlgorithm, PlayCtx, RunConfig } from '@/types'
 import { listAlgorithms, playStart } from '@/api'
 import CustomAlgoUpload from './CustomAlgoUpload'
 import { NumberStepper } from './NumberStepper'
-import { SelectField, Option } from './SelectField'
+import { SegmentedToggle } from './SegmentedToggle'
 
 const ALL_ALGOS = [
   { key: 'greedy', label: 'Greedy (min)' },
@@ -112,13 +112,8 @@ export function Controls({
     setOpenInfo(prev => (prev === key ? null : key));
   }
 
-  const banditOptions: Option[] = [
-    { label: "Bernoulli", value: "bernoulli" },
-    { label: "Gaussian", value: "gaussian" },
-  ];
-
   return (
-    <div className="space-y-6 w-1xl">
+    <div className="space-y-12 w-1xl">
       <div className="space-y-1 flex flex-wrap items-center">
         <div className="text-lg font-semibold p-2">Pizzeria Setup</div>
         <button
@@ -143,14 +138,17 @@ export function Controls({
         {/*  */}
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        <SelectField<EnvType>
+      <div className="grid grid-cols-2 gap-x-[4rem] gap-y-4 justify-items-stretch">
+        <SegmentedToggle<EnvType>
           label="Bandit"
-          id="bandit"
           value={env}
           onChange={setEnv}
-          options={banditOptions}
-          required
+          options={[
+            { label: "Bernoulli", value: "bernoulli" },
+            { label: "Gaussian", value: "gaussian" },
+          ]}
+          size="lg"
+          className="w-full"
         />
         <div>
           <NumberStepper

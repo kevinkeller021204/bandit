@@ -58,11 +58,11 @@ export default function Header({
                 >
                     <Scrollspy
                         items={[selectionId, resultsId]}
-                        currentClassName="is-active" // applied to the matching <li>
+                        currentClassName="is-active" 
                         onUpdate={(el) => el && setActive(el.id)}
-                        offset={-72}                 // helps when you have a sticky header
+                        offset={-72} 
                         componentTag="ul"
-                        className="hidden sm:flex items-center gap-2 rounded-2xl bg-zinc-100/60 p-1 ring-1 ring-inset ring-zinc-200/60"
+                        className="hidden sm:flex items-center gap-2 rounded-xl bg-zinc-100/60 p-1 ring-1 ring-inset ring-zinc-200/60"
                     >
                         <li className="list-none">
                             <a

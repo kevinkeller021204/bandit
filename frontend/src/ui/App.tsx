@@ -41,7 +41,7 @@ export default function App() {
         // setPlayCtx={setPlayCtx} 
         />
       </main>
-      <a className="p-3 text-gray-400" href="https://www.freepik.com/free-vector/hand-drawn-food-pattern-background_72159777.htm#fromView=search&page=1&position=2&uuid=27d277a2-f9d0-40e0-b811-5c3d50825a1a&query=pizza">Image by pikisuperstar on Freepik</a>
+      {/* <a className="p-3 text-gray-400" href="https://www.freepik.com/free-vector/hand-drawn-food-pattern-background_72159777.htm#fromView=search&page=1&position=2&uuid=27d277a2-f9d0-40e0-b811-5c3d50825a1a&query=pizza">Image by pikisuperstar on Freepik</a> */}
     </div>
   )
 }
