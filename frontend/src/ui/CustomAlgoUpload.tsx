@@ -76,7 +76,7 @@ export default function CustomAlgoUpload({
       />
 
       {/* One button only */}
-      <button className="btn" onClick={onButtonClick} disabled={busy}>
+      <button className="btn w-42" onClick={onButtonClick} disabled={busy}>
         {busy ? 'Uploading…' : file ? `Upload ${file.name}` : 'Upload algorithm'}
       </button>
 
