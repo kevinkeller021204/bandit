@@ -12,16 +12,13 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import child_process from 'node:child_process';
 import keytar from 'keytar';
-import open from 'open';
 import ngrok from '@ngrok/ngrok';
-
+import { shell, /* ... */ } from 'electron';
 const OWNER = "kevinkeller021204";
 const REPO  = "bandit";
-const OAUTH_CLIENT_ID = "Ov23li4XxUY7RPSh20Ky"; // GitHub OAuth App
 const GH_APP_NAME = "bandit-desktop";
-const GH_SCOPES = "repo"; // read private releases
 const APPDATA = app.getPath('userData');
-
+let mainWindow;
 let win, serverProc, ngrokUrl;
 //stop caching, generic webdevelopment frontend problem
 app.commandLine.appendSwitch("disable-http-cache");
@@ -51,11 +48,14 @@ app.on('activate', () => {
 });
 
 
-// Prüfen, ob Tokens existieren
+// Prüfen, ob Tokens existieren, nun für public repo
 ipcMain.on('check-credentials', async (ev) => {
   const hasNgrok  = !!(await keytar.getPassword(GH_APP_NAME, NGROK_KEY));
-  const hasGithub = !!(await keytar.getPassword(GH_APP_NAME, 'github_token'));
-  ev.sender.send('credentials-status', { ngrok: hasNgrok, github: hasGithub });
+  ev.sender.send('credentials-status', { ngrok: hasNgrok });
+});
+
+ipcMain.on('open-external', (_ev, url) => {
+  try { shell.openExternal(url); } catch (e) { err(e); }
 });
 
 // Tokens löschen (und UI updaten)
@@ -65,15 +65,40 @@ ipcMain.on('delete-credentials', async (_ev, which) => {
       await keytar.deletePassword(GH_APP_NAME, NGROK_KEY);
       status('ngrok-Token gelöscht.');
       emit('credentials-changed', { ngrok: false });
-    } else if (which === 'github') {
-      await keytar.deletePassword(GH_APP_NAME, 'github_token');
-      status('GitHub-Token gelöscht.');
-      emit('credentials-changed', { github: false });
     } else {
       throw new Error('Unbekannter Credential-Typ: ' + which);
     }
   } catch (e) { err(e); }
 });
+
+// IPC: Vollbild umschalten und Status zurück an Renderer
+ipcMain.on('toggle-fullscreen', (_ev, on) => {
+  if (!win) return;
+  win.setFullScreen(!!on);
+  win.webContents.send('fullscreen-changed', !!on);
+});
+
+
+async function latestReleasePublic() {
+  const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, {
+    headers: { Accept: "application/vnd.github+json" }
+  });
+  if (!r.ok) throw new Error("GitHub API: " + r.status);
+  return r.json();
+}
+
+async function dlPublic(asset, outDir = APPDATA) {
+  const out = path.join(outDir, asset.name);
+  const r = await fetch(asset.browser_download_url, { redirect: "follow" });
+  if (!r.ok) {
+    const txt = await r.text().catch(()=> "");
+    throw new Error("Download: " + r.status + " " + txt);
+  }
+  const buf = Buffer.from(await r.arrayBuffer());
+  await fs.promises.writeFile(out, buf);
+  return out;
+}
+
 
 
 function createWindow() {
@@ -90,6 +115,11 @@ function createWindow() {
     }
   });
 
+
+  win.on('enter-full-screen', () => win.webContents.send('fullscreen-changed', true));
+  win.on('leave-full-screen', () => win.webContents.send('fullscreen-changed', false));
+
+
   win.loadFile(join(__dirname, 'renderer.html'));
   win.on('closed', () => { win = null; });
 }
@@ -104,33 +134,7 @@ const emit = (ch, msg) => win?.webContents.send(ch, msg);
 const status = (msg) => emit('status', msg);
 const err = (e) => emit('error', String(e));
 
-async function getToken() {
-  let tok = await keytar.getPassword(GH_APP_NAME, 'github_token');
-  if (tok) return tok;
 
-  const dev = await (await fetch("https://github.com/login/device/code", {
-    method: "POST", headers: { "Content-Type":"application/json", "Accept":"application/json" },
-    body: JSON.stringify({ client_id: OAUTH_CLIENT_ID, scope: GH_SCOPES })
-  })).json();
-
-  dialog.showMessageBoxSync({ type: "info", message: `GitHub Code: ${dev.user_code}`, detail: "Wir öffnen GitHub im Browser.", buttons: ["OK"] });
-  await open("https://github.com/login/device");
-  await open(dev.verification_uri);
-
-  while (true) {
-    await new Promise(r=> setTimeout(r, dev.interval*1000));
-    const r = await fetch("https://github.com/login/oauth/access_token", {
-      method: "POST", headers: { "Content-Type":"application/json", "Accept":"application/json" },
-      body: JSON.stringify({ client_id: OAUTH_CLIENT_ID, device_code: dev.device_code, grant_type: "urn:ietf:params:oauth:grant-type:device_code" })
-    });
-    const js = await r.json();
-    if (js.access_token) { tok = js.access_token; break; }
-    if (js.error && js.error !== "authorization_pending") throw new Error("OAuth: " + js.error);
-  }
-  await keytar.setPassword(GH_APP_NAME, 'github_token', tok);
-  emit('credentials-changed', { github: true });
-  return tok;
-}
 
 async function getNgrokToken() {
   // erst aus Keychain
@@ -141,6 +145,9 @@ async function getNgrokToken() {
   status("Bitte ngrok Authtoken eingeben …");
   emit('need-ngrok-token'); // Renderer zeigt Eingabefeld
 
+    try {
+    await shell.openExternal('https://dashboard.ngrok.com/get-started/your-authtoken');
+  } catch (_) { /* ignorieren, falls Browser nicht geöffnet werden kann */ }
   tok = await new Promise((resolve, reject) => {
     // einmalig auf Antwort warten
     ipcMain.once('set-ngrok-token', async (_ev, val) => {
@@ -156,46 +163,7 @@ async function getNgrokToken() {
   return tok;
 }
 
-async function latestRelease(token) {
-  const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" }
-  });
 
-  if (r.status === 401) {
-    console.warn("GitHub token ungültig oder revoked – starte neuen Device Flow …");
-    await keytar.deletePassword(GH_APP_NAME, 'github_token'); // alten Token löschen
-    const newTok = await getToken(); // automatisch neu authentifizieren
-    // nochmal probieren
-    return latestRelease(newTok);
-  }
-
-  if (!r.ok) {
-    throw new Error("GitHub API: " + r.status);
-  }
-
-  return await r.json();
-}
-
-
-async function dl(token, asset, outDir = APPDATA) {
-  const out = path.join(outDir, asset.name);
-  const r = await fetch(asset.url, {   // 👈 statt asset.browser_download_url → asset.url
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/octet-stream"  // 👈 zwingend für private Assets
-    },
-    redirect: "follow"
-  });
-
-  if (!r.ok) {
-    const txt = await r.text().catch(()=> "");
-    throw new Error("Download: " + r.status + " " + txt);
-  }
-
-  const buf = Buffer.from(await r.arrayBuffer());
-  await fs.promises.writeFile(out, buf);
-  return out;
-}
 
 
 function sha256(p) { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
@@ -214,9 +182,8 @@ function unzip(zipPath, destDir) {
 function binPath(dir) { return process.platform === "win32" ? path.join(dir, "bandit-server.exe") : path.join(dir, "bandit-server"); }
 
 async function ensureBundle() {
-  const token = await getToken();
   status("Prüfe neuestes Release …");
-  const rel = await latestRelease(token);
+  const rel = await latestReleasePublic();           // <-- ohne Token
   const tag = rel.tag_name;
   const dir = path.join(APPDATA, "bundles", tag);
 
@@ -224,32 +191,31 @@ async function ensureBundle() {
     const { zipName, sumsName } = namesForPlatform(process.platform);
     const zipAsset = rel.assets.find(a => a.name === zipName);
     const sumAsset = rel.assets.find(a => a.name === sumsName);
-
     if (!zipAsset || !sumAsset) {
-    console.log("Available assets:", rel.assets.map(a => a.name));
-    throw new Error(`Release-Assets fehlen: ${zipName} / ${sumsName}`);
+      console.log("Available assets:", rel.assets.map(a => a.name));
+      throw new Error(`Release-Assets fehlen: ${zipName} / ${sumsName}`);
     }
-    if (!zipAsset || !sumAsset) throw new Error("Release Assets fehlen");
-    status("Lade Release …");
-    const zipPath = await dl(token, zipAsset);
-    const sumPath = await dl(token, sumAsset);
-    status("Verifiziere …");
-    verify(zipPath, sumPath);
-    status("Entpacke …");
-    unzip(zipPath, dir);
-    try {
-    if (process.platform !== 'win32') {
-    const bin = path.join(dir, 'bandit-server');
-    await fs.promises.chmod(bin, 0o755);
-    if (process.platform === 'darwin') {
-        try { child_process.execSync(`xattr -dr com.apple.quarantine "${bin}"`); } catch {}
-    }
-    }
-} catch {}
 
+    status("Lade Release …");
+    const zipPath = await dlPublic(zipAsset);        // <-- ohne Token
+    const sumPath = await dlPublic(sumAsset);        // <-- ohne Token
+
+    status("Verifiziere …");  verify(zipPath, sumPath);
+    status("Entpacke …");     unzip(zipPath, dir);
+
+    try {
+      if (process.platform !== 'win32') {
+        const bin = path.join(dir, 'bandit-server');
+        await fs.promises.chmod(bin, 0o755);
+        if (process.platform === 'darwin') {
+          try { child_process.execSync(`xattr -dr com.apple.quarantine "${bin}"`); } catch {}
+        }
+      }
+    } catch {}
   }
   return dir;
 }
+
 
 function namesForPlatform(platform){
   if (platform === 'darwin')  return { zipName: 'bandit-local-macos.zip',   sumsName: 'SHA256SUMS-macos.txt' };
@@ -292,6 +258,12 @@ ipcMain.on('host-offline', async ()=>{
     emit('open-url', "http://127.0.0.1:5050");
   } catch (e) { err(e); }
 });
+
+// Externen Link aus dem Renderer öffnen (für "ngrok öffnen" Button)
+ipcMain.on('open-external', async (_ev, url) => {
+  try { await open(url); } catch (e) { err(e); }
+});
+
 
 function toUrlString(conn) {
   // v1 SDK: Listener-Objekt hat meist .url() oder .url
