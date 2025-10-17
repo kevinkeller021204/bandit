@@ -366,8 +366,9 @@ def _import_callable(module_path: str, func_name: str):
     return fn
 
 # --- dev/prod switch ---
-IS_DEV = os.environ.get("VITE_DEV", "1") == "1"
+IS_DEV = os.environ.get("VITE_DEV", "0") == "1"
 VITE_URL = os.environ.get("VITE_URL", "http://localhost:5173")
+
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
