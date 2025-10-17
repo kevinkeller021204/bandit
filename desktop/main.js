@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { spawn } from 'node:child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const NGROK_KEY = 'ngrok_authtoken';
@@ -20,6 +21,7 @@ const GH_APP_NAME = "bandit-desktop";
 const APPDATA = app.getPath('userData');
 let mainWindow;
 let win, serverProc, ngrokUrl;
+let ngrokProc = null;
 //stop caching, generic webdevelopment frontend problem
 app.commandLine.appendSwitch("disable-http-cache");
 
@@ -249,11 +251,16 @@ async function waitReady(url) {
   throw new Error("Server start timeout");
 }
 
+app.on('before-quit', () => stopNgrok());
+process.on('exit', () => stopNgrok());
+
+
 ipcMain.on('host-offline', async ()=>{
   try {
+    stopNgrok();
     const dir = await ensureBundle();
     startServer(dir);
-    await waitReady("http://127.0.0.1:5050");
+    await waitReady("http://127.0.0.1:5050/api/health");
     status("Offline bereit: http://127.0.0.1:5050");
     emit('open-url', "http://127.0.0.1:5050");
   } catch (e) { err(e); }
@@ -265,6 +272,18 @@ ipcMain.on('open-external', async (_ev, url) => {
 });
 
 
+function stopNgrok() {
+  try { if (ngrokProc && !ngrokProc.killed) ngrokProc.kill('SIGTERM'); } catch {}
+  ngrokProc = null;
+}
+
+function startNgrok(port = 5050) {
+  ngrokProc = spawn('ngrok', ['http', String(port)], { stdio: 'pipe' });
+  ngrokProc.stdout.on('data', d => console.log('[ngrok]', d.toString()));
+  ngrokProc.stderr.on('data', d => console.error('[ngrok]', d.toString()));
+  ngrokProc.on('exit', () => { ngrokProc = null; });
+}
+
 function toUrlString(conn) {
   // v1 SDK: Listener-Objekt hat meist .url() oder .url
   if (typeof conn === 'string') return conn;
@@ -275,11 +294,13 @@ function toUrlString(conn) {
 
 ipcMain.on('host-online', async () => {
   try {
+    stopNgrok();
     const dir = await ensureBundle();
     startServer(dir);
-    await waitReady('http://127.0.0.1:5050');
+    await waitReady("http://127.0.0.1:5050/api/health");
 
     const tok = await getNgrokToken();
+    startNgrok(5050);
     status('Starte ngrok …');
 
     // je nach SDK: connect / forward

@@ -220,6 +220,10 @@
         currentUrlEl.textContent = lastUrl;
         currentUrlEl.href = lastUrl;
         urlRow.classList.remove('hidden');
+        if (!didAutoTheater) {
+          didAutoTheater = true;
+          setTimeout(() => toggleTheater(true), 120);
+        }
       }
       function clearUrlRow(){
         lastUrl = '';
@@ -249,13 +253,7 @@
       fullscreenBtn.onclick = () => toggleTheater();
       fsExit.onclick        = () => toggleTheater(false);
       
-      frame.addEventListener('load', () => {
-      if (!didAutoTheater) {
-        didAutoTheater = true;
-        // kleines Delay, damit Layout/CSS sicher fertig ist
-        setTimeout(() => toggleTheater(true), 120);
-      }
-    });
+
 
     </script>
   </body>
