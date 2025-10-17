@@ -1,4 +1,4 @@
-import type { RunConfig, RunResponse, UploadedAlgorithm } from '@/types'
+import type { PlayEndRequest, PlayEndResponse, PlayLogResponse, PlayResetRequest, PlayResetResponse, PlayStartRequest, PlayStartResponse, PlayStepResponse, PlotFromSessionRequest, RunConfig, RunResponse, UploadedAlgorithm } from '@/types'
 
 // Hinweis:
 // Keine harte BASE-URL mehr! Wir rufen relativ zur aktuell geladenen Seite auf.
@@ -52,10 +52,39 @@ export async function listAlgorithms(): Promise<UploadedAlgorithm[]> {
   return res.json();
 }
 
-export async function runExperiment(cfg: RunConfig): Promise<RunResponse> {
-  return request<RunResponse>('/api/run', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(cfg),
-  });
+export async function playStart(cfg: PlayStartRequest): Promise<PlayStartResponse> {
+  const r = await fetch('/api/play/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function playStep(session_id: string, action: number): Promise<PlayStepResponse> {
+  const r = await fetch('/api/play/step', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id, action }) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function playLog(session_id: string): Promise<PlayLogResponse> {
+  const r = await fetch(`/api/play/log?session_id=${encodeURIComponent(session_id)}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function playEnd(session_id: string): Promise<PlayEndResponse> {
+  const r = await fetch('/api/play/end', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id } as PlayEndRequest) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// only if you added the backend reset endpoint:
+export async function playReset(session_id: string): Promise<PlayResetResponse> {
+  const r = await fetch('/api/play/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id } as PlayResetRequest) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function plotFromSession(payload: PlotFromSessionRequest): Promise<RunResponse> {
+  const r = await fetch('/api/plot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
 }
