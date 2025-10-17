@@ -198,7 +198,7 @@ export default function ManualPlay({
     backendEnv?.type ?? (localEnv?.kind ?? (cfg.env as "bernoulli" | "gaussian"));
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full flex-col gap-4">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
@@ -223,7 +223,7 @@ export default function ManualPlay({
             show true environment
           </label>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 ">
           {Array.from({ length: N }).map((_, i) => {
             const truth =
               backendEnv?.type === "bernoulli" ? backendEnv.p?.[i] :
@@ -277,7 +277,7 @@ export default function ManualPlay({
       {/* Log */}
       <div className="rounded border border-zinc-200 bg-white p-3">
         <div className="mb-2 font-semibold">Event log</div>
-        <div className="h-48 overflow-auto text-sm leading-6">
+        <div className="h-[26rem] overflow-auto text-sm leading-6">
           {log.length === 0 ? (
             <div className="text-zinc-500">No events yet.</div>
           ) : (

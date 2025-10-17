@@ -157,9 +157,9 @@ export function Controls({
         {/*  */}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
-          <div className="label mb-1">Bandit</div>
+          <div className="label mb-1 pr-3">Bandit</div>
           <select value={env} onChange={e => setEnv(e.target.value as EnvType)} className="input w-full">
             <option value="bernoulli">Bernoulli</option>
             <option value="gaussian">Gaussian</option>
@@ -185,7 +185,7 @@ export function Controls({
       {/* One unified list */}
       <div>
         <div className="label mb-2">Algorithmen</div>
-        <div className="grid grid-cols-1 gap-2">
+        <div className="grid grid-cols-2 gap-2 items-start">
           {/* built-ins */}
           {ALL_ALGOS.map(a => (
             <div key={a.key} className="rounded border border-zinc-200 p-2">

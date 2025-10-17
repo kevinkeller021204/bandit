@@ -192,21 +192,21 @@ export function Results({
   }, []);
 
   // ---------- RENDER ----------
-  return (
-    <div className="space-y-8">
-      {/* top bar */}
-      <div className="space-y-1">
-        <div className="text-lg font-semibold">
-          {(hasPlotted || keys.includes('manual')) ? 'Pizzeria Ergebnisse 🍕' : 'Manual Play Session 🍕'}
-        </div>
-        <div className="text-sm text-zinc-600">
-          Kundenmodell: <span className="font-medium">{isBernoulli ? 'Bernoulli' : 'Gaussian'}</span> •{' '}
-          Toppings: <span className="font-medium">{envInfo.n_actions ?? 0}</span>
-        </div>
-      </div>
+  return hasSession && (
+    <section className="card card-pad w-4/5" id="results">
+      <div className="grid gap-8 items-start md:grid-cols-2">
+        {/* header: spans both columns */}
+        {/* <div className="md:col-span-2">
+          <div className="text-lg font-semibold">
+            {(hasPlotted || keys.includes('manual')) ? 'Pizzeria Ergebnisse 🍕' : 'Manual Play Session 🍕'}
+          </div>
+          <div className="text-sm text-zinc-600">
+            Kundenmodell: <span className="font-medium">{isBernoulli ? 'Bernoulli' : 'Gaussian'}</span> •{' '}
+            Toppings: <span className="font-medium">{envInfo.n_actions ?? 0}</span>
+          </div>
+        </div> */}
 
-      {/* manual surface */}
-      {hasSession && (
+       {/* left column: manual tester */}
         <div className="space-y-2">
           <ManualPlay
             cfg={manualCfg}
@@ -216,105 +216,103 @@ export function Results({
             onEvent={handleEvent}
           />
         </div>
-      )}
+        {loading && <div className="text-zinc-600">Running…</div>}
+        {!loading && !hasSession && !hasPlotted && !hasManual && (
+          <div className="text-zinc-600">No run yet.</div>
+        )}
 
-      {/* info states */}
-      {loading && <div className="text-zinc-600">Running…</div>}
-      {!loading && !hasSession && !hasPlotted && !hasManual && (
-        <div className="text-zinc-600">No run yet.</div>
-      )}
-
-      {/* charts (render if any series exists) */}
-      {hasPlotted && (
-        <>
-          {/* LINE CHART*/}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold">{yLabel} over time</div>
-              <div className="flex gap-2">
-                <button type="button" className="btn-subtle" onClick={exportLinePNG} title="Download PNG (1920×1080)">PNG</button>
-                <button type="button" className="btn-subtle" onClick={exportLineSVG} title="Download SVG">SVG</button>
-                <button type="button" className="btn-subtle" onClick={copyLinePNG} title="Copy PNG to clipboard">Copy</button>
-              </div>
-            </div>
-            <div className="h-64 card" ref={lineRef}>
-              <div className="card-pad h-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={lines}>
-                    <XAxis dataKey="t" tickFormatter={(t) => `Kunde ${t}`} />
-                    <YAxis
-                      domain={isBernoulli ? [0, 1] : ['auto', 'auto']}
-                    // tickFormatter={(v) => isBernoulli ? `${Math.round((v as number) * 100)}%` : (v as number)}
-                    />
-                    <Tooltip
-                      labelFormatter={(t) => `Kunde ${t}`}
-                      formatter={(value: any, name: string) => [
-                        isBernoulli ? `${(value as number * 100).toFixed(1)}%` : (value as number).toFixed(3),
-                        algoNames[name] || name
-                      ]}
-                    />
-                    <Legend />
-                    {keys.map(k => (
-                      <Line key={k} type="monotone" dot={false} dataKey={k} stroke={algoColors[k] || "black"} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* BAR CHART */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold">Toppings angeboten (Häufigkeit)</div>
-              <div className="flex gap-2">
-                <button type="button" className="btn-subtle" onClick={exportBarPNG} title="Download PNG (1920×1080)">PNG</button>
-                <button type="button" className="btn-subtle" onClick={exportBarSVG} title="Download SVG">SVG</button>
-                <button type="button" className="btn-subtle" onClick={copyBarPNG} title="Copy PNG to clipboard">Copy</button>
-              </div>
-            </div>
-            <div className="h-64 card" ref={barRef}>
-              <div className="card-pad h-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData}>
-                    <XAxis dataKey="action" />
-                    <YAxis />
-                    <Tooltip
-                      labelFormatter={(v) => `Topping ${String(v).replace('T', '')}`}
-                      formatter={(value: any, name: string) => [value, algoNames[name] || name]}
-                    />
-                    <Legend formatter={(v) => algoNames[v] || v} />
-                    {keys.map((k) => (
-                      <Bar key={k} dataKey={k} name={algoNames[k] || k} fill={algoColors[k] || 'black'} />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-
-          {/* KPI */}
-          <div className="space-y-2">
-            <div className="text-lg font-semibold">Leistung je Strategie</div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {keys.map(k => (
-                <div key={k} className="card p-4" style={{ borderTop: `4px solid ${algoColors[k] || "black"}` }}>
-                  <div className="text-sm text-zinc-600">{algoNames[k] || k}</div>
-                  <div className="text-2xl font-semibold">
-                    {isBernoulli
-                      ? `${(summaryCards[k].final_avg_reward * 100).toFixed(1)}%`
-                      : summaryCards[k].final_avg_reward.toFixed(3)}
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    {isBernoulli ? 'Finale Akzeptanzrate' : 'Finaler durchschnittl. Reward'}
-                  </div>
+        {/* right column: results */}
+        {hasPlotted && (
+          <div className="space-y-8">
+            {/* LINE CHART*/}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">{yLabel} over time</div>
+                <div className="flex gap-2">
+                  <button type="button" className="btn-subtle" onClick={exportLinePNG} title="Download PNG (1920×1080)">PNG</button>
+                  <button type="button" className="btn-subtle" onClick={exportLineSVG} title="Download SVG">SVG</button>
+                  <button type="button" className="btn-subtle" onClick={copyLinePNG} title="Copy PNG to clipboard">Copy</button>
                 </div>
-              ))}
+              </div>
+              <div className="h-64 card" ref={lineRef}>
+                <div className="card-pad h-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={lines}>
+                      <XAxis dataKey="t" tickFormatter={(t) => `Kunde ${t}`} />
+                      <YAxis
+                        domain={isBernoulli ? [0, 1] : ['auto', 'auto']}
+                      // tickFormatter={(v) => isBernoulli ? `${Math.round((v as number) * 100)}%` : (v as number)}
+                      />
+                      <Tooltip
+                        labelFormatter={(t) => `Kunde ${t}`}
+                        formatter={(value: any, name: string) => [
+                          isBernoulli ? `${(value as number * 100).toFixed(1)}%` : (value as number).toFixed(3),
+                          algoNames[name] || name
+                        ]}
+                      />
+                      <Legend />
+                      {keys.map(k => (
+                        <Line key={k} type="monotone" dot={false} dataKey={k} stroke={algoColors[k] || "black"} />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* BAR CHART */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">Toppings angeboten (Häufigkeit)</div>
+                <div className="flex gap-2">
+                  <button type="button" className="btn-subtle" onClick={exportBarPNG} title="Download PNG (1920×1080)">PNG</button>
+                  <button type="button" className="btn-subtle" onClick={exportBarSVG} title="Download SVG">SVG</button>
+                  <button type="button" className="btn-subtle" onClick={copyBarPNG} title="Copy PNG to clipboard">Copy</button>
+                </div>
+              </div>
+              <div className="h-64 card" ref={barRef}>
+                <div className="card-pad h-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData}>
+                      <XAxis dataKey="action" />
+                      <YAxis />
+                      <Tooltip
+                        labelFormatter={(v) => `Topping ${String(v).replace('T', '')}`}
+                        formatter={(value: any, name: string) => [value, algoNames[name] || name]}
+                      />
+                      <Legend formatter={(v) => algoNames[v] || v} />
+                      {keys.map((k) => (
+                        <Bar key={k} dataKey={k} name={algoNames[k] || k} fill={algoColors[k] || 'black'} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+
+            {/* KPI */}
+            <div className="space-y-2">
+              <div className="text-lg font-semibold">Leistung je Strategie</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {keys.map(k => (
+                  <div key={k} className="card p-4" style={{ borderTop: `4px solid ${algoColors[k] || "black"}` }}>
+                    <div className="text-sm text-zinc-600">{algoNames[k] || k}</div>
+                    <div className="text-2xl font-semibold">
+                      {isBernoulli
+                        ? `${(summaryCards[k].final_avg_reward * 100).toFixed(1)}%`
+                        : summaryCards[k].final_avg_reward.toFixed(3)}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      {isBernoulli ? 'Finale Akzeptanzrate' : 'Finaler durchschnittl. Reward'}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </>
-      )}
-    </div>
+        )}
+      </div>
+    </section>
   )
 }

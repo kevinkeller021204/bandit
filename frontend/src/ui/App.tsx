@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Controls } from './Controls'
 import { Results } from './Results'
 import type { RunResponse } from '@/types'
+import Header from './Header'
 
 export default function App() {
   const [data, setData] = useState<RunResponse | null>(null)
@@ -20,28 +21,25 @@ export default function App() {
 
   return (
     <div className="min-h-full">
-      <header className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-zinc-200">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
-          <div className="text-xl font-semibold tracking-tight">SliceWise 🍕 — Topping-Bandit-Labor</div>
-          <div className="text-xs text-zinc-600">SPA • React • Quart</div>
-        </div>
-      </header>
+      <Header
+        selectionId="selection"
+        resultsId="results"
+        onTranslate={() => console.log("translate clicked")}
+      />
 
-      <main className="mx-auto max-w-6xl p-6 grid gap-6 md:grid-cols-[360px,1fr]">
+      <main className="mx-auto w-4xl p-6 grid gap-6 grid-cols-1 justify-items-center" >
         {/* LEFT: Controls (creates a Play session and later triggers Plot) */}
-        <section className="card card-pad">
+        <section className="card card-pad w-2/5 scroll-mt-[72px]"  id="selection">
           <Controls
             disabled={loading}
-            onLoadingChange={setLoading}          // ★ App owns loading spinner
-            onPlotDone={(resp) => setData(resp)}  // ★ results from /api/plot land here
+            onLoadingChange={setLoading}
+            onPlotDone={(resp) => setData(resp)}
             onPlayStarted={handlePlayStarted}
           />
         </section>
 
-        {/* RIGHT: Results (renders charts after Plot) */}
-        <section className="card card-pad">
-          <Results data={data} loading={loading} playCtx={playCtx} />
-        </section>
+        {/* RIGHT: Results (renders charts after play or plot) */}
+        <Results data={data} loading={loading} playCtx={playCtx} />
       </main>
     </div>
   )
