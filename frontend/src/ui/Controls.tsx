@@ -114,6 +114,7 @@ export function Controls({
       onPlayStarted?.({
         algorithms: algos,
         n_actions: nActions,
+        custom_algorithms: selectedCustom,
         data: s
       })
     }

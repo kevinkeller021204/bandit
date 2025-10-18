@@ -93,14 +93,6 @@ export default function CustomAlgoUpload({
             <div className="label mb-1">{t('controls.name')}</div>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} />
           </div>
-          <div>
-            <div className="label mb-1">{t('controls.entryFunction')}</div>
-            <input className="input w-full" value={entry} onChange={e => setEntry(e.target.value)} />
-          </div>
-          <div className="text-xs text-zinc-600">
-            <div className="label mb-1">{t('controls.sha256')}</div>
-            <div className="font-mono break-all">{hash}</div>
-          </div>
         </div>
       )}
 
