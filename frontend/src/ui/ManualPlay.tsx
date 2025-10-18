@@ -1,28 +1,55 @@
-// src/ManualPlay.tsx
+// src/ui/ManualPlay.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EnvInfo, PlayCtx } from "@/types";
 import { playLog, playReset, playStep } from "@/api";
 import { scrollTo } from "@/utils/nav";
 import { useTranslation } from "react-i18next";
 
+/**
+* ManualPlay
+* ------------------------
+* Interactive panel to "manually" pull arms (pick toppings) .
+*
+* Simplified design:
+* - No local/demo environment, no RNG, no Gaussian sampling.
+* - All state comes from the server via `playLog`, `playStep`, and `playReset`.
+* - The component derives labels, progress, and quick feedback from that server truth.
+*
+* Responsibilities
+* - Fetch the current session state (env, iterations, history) on mount/update.
+* - Send steps to the server when a topping is clicked and append the returned event.
+* - Reset input history on the server and re-sync when requested.
+* - Bubble chronological events to the parent via `onSync` (for charts/KPIs).
+*
+* UX/Perf notes
+* - The visible log is newest-first (easier to scan). We still provide chronological history upward.
+* - Log is capped to 500 entries to bound DOM size.
+* - Topping labels are generated from a static list and remain stable for a given `n_actions`.
+*/
+
 /** list of 100 topping base names used to generate N labels */
 export const BASE_TOPPINGS = [
-  "Ananas","Salami","Schinken","Champignons","Paprika","Zwiebeln","Oliven","Thunfisch","Peperoni","Spinat",
-  "Mais","Artischocken","Brokkoli","Rucola","Feta","Mozzarella","Parmesan","Gorgonzola","Cheddar","Gouda",
-  "Ricotta","Burrata","Pecorino","Hähnchen","Speck","Prosciutto","Salsiccia","Chorizo","Hackfleisch","Rinderstreifen",
-  "Lachs","Garnelen","Muscheln","Sardellen","Krabben","Jalapeños","Peperoncini","Chili","Knoblauch","Getrocknete Tomaten",
-  "Tomaten","Kirschtomaten","Kapern","Aubergine","Zucchini","Rote Bete","Kürbis","Süßkartoffel","Kartoffeln","Trüffel",
-  "Trüffelöl","Basilikum","Oregano","Petersilie","Koriander","Ei","Pinienkerne","Walnüsse","Haselnüsse","Pistazien",
-  "Mandeln","Honig","Birne","Apfel","Feige","Trauben","Mango","BBQ-Soße","Pesto","Ajvar",
-  "Hummus","Crème fraîche","Sour Cream","Schmand","Erbsen","Edamame","Kimchi","Bresaola","Mortadella","Pancetta",
-  "Gyros","Kebab","Pulled Pork","Pulled Chicken","Tofu","Tempeh","Seitan","Vegane Wurst","Veganer Käse","Blauschimmelkäse",
-  "Taleggio","Provolone","Emmentaler","Bergkäse","Camembert","Brie","Ziegenkäse","Schafskäse","Lauch","Frühlingszwiebeln",
-  "Rauchlachs","Kaviar","Kapernäpfel","Röstzwiebeln","Knuspriger Knoblauch","Salsa Verde","Salsa Picante","Chipotle","Sriracha","Harissa",
-  "Rosenkohl","Grüner Spargel","Weißer Spargel","Lauchzwiebelöl","Knoblauchöl","Chimichurri","Rote Zwiebeln","Pfefferoni","Maiscreme","Ricotta-Zitrone"
+  "Ananas", "Salami", "Schinken", "Champignons", "Paprika", "Zwiebeln", "Oliven", "Thunfisch", "Peperoni", "Spinat",
+  "Mais", "Artischocken", "Brokkoli", "Rucola", "Feta", "Mozzarella", "Parmesan", "Gorgonzola", "Cheddar", "Gouda",
+  "Ricotta", "Burrata", "Pecorino", "Hähnchen", "Speck", "Prosciutto", "Salsiccia", "Chorizo", "Hackfleisch", "Rinderstreifen",
+  "Lachs", "Garnelen", "Muscheln", "Sardellen", "Krabben", "Jalapeños", "Peperoncini", "Chili", "Knoblauch", "Getrocknete Tomaten",
+  "Tomaten", "Kirschtomaten", "Kapern", "Aubergine", "Zucchini", "Rote Bete", "Kürbis", "Süßkartoffel", "Kartoffeln", "Trüffel",
+  "Trüffelöl", "Basilikum", "Oregano", "Petersilie", "Koriander", "Ei", "Pinienkerne", "Walnüsse", "Haselnüsse", "Pistazien",
+  "Mandeln", "Honig", "Birne", "Apfel", "Feige", "Trauben", "Mango", "BBQ-Soße", "Pesto", "Ajvar",
+  "Hummus", "Crème fraîche", "Sour Cream", "Schmand", "Erbsen", "Edamame", "Kimchi", "Bresaola", "Mortadella", "Pancetta",
+  "Gyros", "Kebab", "Pulled Pork", "Pulled Chicken", "Tofu", "Tempeh", "Seitan", "Vegane Wurst", "Veganer Käse", "Blauschimmelkäse",
+  "Taleggio", "Provolone", "Emmentaler", "Bergkäse", "Camembert", "Brie", "Ziegenkäse", "Schafskäse", "Lauch", "Frühlingszwiebeln",
+  "Rauchlachs", "Kaviar", "Kapernäpfel", "Röstzwiebeln", "Knuspriger Knoblauch", "Salsa Verde", "Salsa Picante", "Chipotle", "Sriracha", "Harissa",
+  "Rosenkohl", "Grüner Spargel", "Weißer Spargel", "Lauchzwiebelöl", "Knoblauchöl", "Chimichurri", "Rote Zwiebeln", "Pfefferoni", "Maiscreme", "Ricotta-Zitrone"
 ] as const;
 
 export type ToppingBase = typeof BASE_TOPPINGS[number];
 
+/**
+ * Build N topping labels by cycling BASE_TOPPINGS and suffixing duplicates 
+ * e.g. ["Ananas","Salami","Ananas 2","Salami 2",…]
+ * Comment: limited toppings to 100 to avoid duplicates
+ */
 export function buildToppings(total: number, base = BASE_TOPPINGS): string[] {
   const result: string[] = [];
   const counts = new Map<string, number>();
@@ -219,8 +246,8 @@ export default function ManualPlay({
           {Array.from({ length: N }).map((_, i) => {
             const truth =
               backendEnv?.type === "bernoulli" ? backendEnv.p?.[i] :
-              backendEnv?.type === "gaussian" ? backendEnv.means?.[i] :
-              undefined;
+                backendEnv?.type === "gaussian" ? backendEnv.means?.[i] :
+                  undefined;
 
             return (
               <button
@@ -280,10 +307,10 @@ export default function ManualPlay({
                 <span>{toppings[e.a]}</span>{' • '}
                 {envKind === "bernoulli"
                   ? <span>
-                      {e.ok ? t('manual.acceptedRaw') : t('manual.skippedRaw')}
-                      {' '}
-                      ({t('manual.rewardEq', { v: e.r })})
-                    </span>
+                    {e.ok ? t('manual.acceptedRaw') : t('manual.skippedRaw')}
+                    {' '}
+                    ({t('manual.rewardEq', { v: e.r })})
+                  </span>
                   : <span>{t('manual.rewardEq', { v: e.r.toFixed(3) })}</span>}
               </div>
             ))

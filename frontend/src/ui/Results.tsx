@@ -1,4 +1,4 @@
-// src/components/Results.tsx
+// src/ui/Results.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayCtx, RunResponse } from '@/types'
 import ManualPlay from './ManualPlay'
@@ -7,6 +7,34 @@ import { exportNodeAsPNG, exportNodeAsSVG } from '@/utils/exportChart'
 import { scrollTo } from '@/utils/nav'
 import { plotFromSession } from '@/api'
 import { useTranslation } from 'react-i18next'
+
+/**
+* Results
+* -------
+* Visualises a bandit run with manual interaction and two charts, KPI cards.
+*
+* High-level flow
+* - On play context changes, clear manual history and scroll to this section
+* - Derive environment/iteration info from either the finished RunResponse (`data`) or the live session (`playCtx`)
+* - Merge algorithm traces with an optional manual trace
+* - Compute chart series:
+* • `lines`: cumulative average reward/acceptance over time per strategy
+* • `barData`: action frequencies per strategy
+* • `summaryCards`: final average reward/acceptance per strategy for KPI tiles
+* - Provide export helpers (PNG/SVG) per chart using DOM refs
+* - Show the ManualPlay panel (left) and the results (right); if no data yet, offer a "Plot Results" button
+*
+* Props
+* - playCtx: live session context (algorithms, env, iterations, session_id)
+* - data: finished/aggregated traces from backend (RunResponse)
+* - setData: setter for `data` (used by onPlot)
+* - resetPlay: resets the live session in the parent
+*
+* Notes
+* - `dangerouslySetInnerHTML` is not used here; chart labels tooltips are pure strings
+* - `algoColors` and `algoNames` handle both built-ins and a manual series
+* - Guard against missing traces/empty series throughout to avoid runtime errors
+*/
 
 type ManualEv = { t: number; action: number; reward: number; accepted?: boolean }
 type Trace = { actions: number[]; rewards: number[] };
@@ -154,8 +182,10 @@ export function Results({
     exportNodeAsSVG(barRef.current, `${base}-action-dist-${ts}.svg`)
   }, [base, ts])
 
-  // Friendly display names and colors per series (covers built-ins + manual)
-  const algoNames: Record<string, string> = {
+  // -------- Names & colors (built-ins + manual + customs) --------
+
+  // Friendly display names for built-ins + manual
+  const builtinNames: Record<string, string> = {
     greedy: "Greedy",
     epsilon_greedy: "ε-Greedy",
     ucb1: "UCB1",
@@ -163,14 +193,71 @@ export function Results({
     gradient: "Gradient",
     manual: t('results.youManual'),
   }
-  const algoColors: Record<string, string> = {
-    greedy: "blue",
-    epsilon_greedy: "orange",
-    ucb1: "green",
-    thompson: "red",
-    gradient: "purple",
-    manual: "#111827",
+
+  // Fixed colors for built-ins & manual
+  const builtinColors: Record<string, string> = {
+    greedy: "#2563eb",         // blue-600
+    epsilon_greedy: "#f59e0b", // amber-500
+    ucb1: "#16a34a",           // green-600
+    thompson: "#ef4444",       // red-500
+    gradient: "#8b5cf6",       // violet-500
+    manual: "#111827",         // zinc-900
   }
+
+  // Palette for customs
+  const CUSTOM_PALETTE = [
+    "#0ea5e9", // sky-500
+    "#10b981", // emerald-500
+    "#eab308", // yellow-500
+    "#06b6d4", // cyan-500
+    "#ec4899", // pink-500
+    "#22c55e", // green-500
+    "#f97316", // orange-500
+    "#14b8a6", // teal-500
+    "#6366f1", // indigo-500
+    "#84cc16", // lime-500
+  ];
+
+  // tiny hash for stable palette indexing
+  function hashStr(s: string) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+    }
+    return h >>> 0;
+  }
+
+  // Lookup table to map trace keys -> nice names for customs (best-effort)
+  const customNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    const customs = playCtx?.custom_algorithms ?? [];
+    for (const a of customs as any[]) {
+      // prefer the provided name
+      if (a?.name) {
+        map[a.name] = `${a.name} (custom)`;
+      }
+      // common identifiers a backend might use
+      if (a?.id) map[a.id] = `${a.name ?? a.id} (custom)`;
+      if (a?.sha256) {
+        map[a.sha256] = `${a.name ?? a.sha256.slice(0, 7)} (custom)`;
+        map[`custom:${a.sha256}`] = `${a.name ?? a.sha256.slice(0, 7)} (custom)`;
+      }
+      // filename fallback
+      if (a?.filename) map[a.filename] = `${a.name ?? a.filename} (custom)`;
+    }
+    return map;
+  }, [playCtx]);
+
+  const displayName = useCallback((k: string) => {
+    return builtinNames[k] ?? customNameMap[k] ?? k;
+  }, [builtinNames, customNameMap]);
+
+  const colorFor = useCallback((k: string) => {
+    if (builtinColors[k]) return builtinColors[k];
+    const idx = hashStr(k) % CUSTOM_PALETTE.length;
+    return CUSTOM_PALETTE[idx];
+  }, []);
 
   // Handlers passed into ManualPlay
   const handleSync = useCallback((hist: ManualEv[]) => setManual(hist), []);
@@ -212,7 +299,7 @@ export function Results({
         {/* Right column: charts + KPIs */}
         {data ? (
           <div className="space-y-8 flex-1 ">
-            {/* LINE CHART*/}
+            {/* LINE CHART */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold">{chartTitle}</div>
@@ -231,12 +318,12 @@ export function Results({
                         labelFormatter={(n) => t('results.customerN', { n })}
                         formatter={(value: any, name: string) => [
                           isBernoulli ? `${(value as number * 100).toFixed(1)}%` : (value as number).toFixed(3),
-                          algoNames[name] || name
+                          displayName(name)
                         ]}
                       />
-                      <Legend />
+                      <Legend formatter={(v) => displayName(v)} />
                       {keys.map(k => (
-                        <Line key={k} type="monotone" dot={false} dataKey={k} stroke={algoColors[k] || "black"} />
+                        <Line key={k} type="monotone" dot={false} dataKey={k} stroke={colorFor(k)} />
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
@@ -261,11 +348,11 @@ export function Results({
                       <YAxis />
                       <Tooltip
                         labelFormatter={(v) => t('results.toppingN', { n: String(v).replace('T', '') })}
-                        formatter={(value: any, name: string) => [value, algoNames[name] || name]}
+                        formatter={(value: any, name: string) => [value, displayName(name)]}
                       />
-                      <Legend formatter={(v) => algoNames[v] || v} />
+                      <Legend formatter={(v) => displayName(v)} />
                       {keys.map((k) => (
-                        <Bar key={k} dataKey={k} name={algoNames[k] || k} fill={algoColors[k] || 'black'} />
+                        <Bar key={k} dataKey={k} name={displayName(k)} fill={colorFor(k)} />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
@@ -278,8 +365,8 @@ export function Results({
               <div className="text-lg font-semibold">{t('results.perfPerStrategy')}</div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {keys.map(k => (
-                  <div key={k} className="card p-4" style={{ borderTop: `4px solid ${algoColors[k] || "black"}` }}>
-                    <div className="text-sm text-zinc-600">{algoNames[k] || k}</div>
+                  <div key={k} className="card p-4" style={{ borderTop: `4px solid ${colorFor(k)}` }}>
+                    <div className="text-sm text-zinc-600">{displayName(k)}</div>
                     <div className="text-2xl font-semibold">
                       {isBernoulli
                         ? `${(summaryCards[k].final_avg_reward * 100).toFixed(1)}%`
@@ -293,14 +380,14 @@ export function Results({
               </div>
             </div>
           </div>
-        ) :
+        ) : (
           // No aggregated data yet: allow the user to compute/plot results from the session
           <div className="flex-1 h-[50rem] flex justify-center items-center" >
             <button className="btn" onClick={onPlot}>
               {t('controls.plot')} {t('nav.results')}
             </button>
           </div>
-        }
+        )}
       </div>
     </section>
   )
