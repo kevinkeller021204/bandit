@@ -3,36 +3,66 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayCtx, RunResponse } from '@/types'
 import ManualPlay from './ManualPlay'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { ExportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './layout/ExportChart'
+import { exportNodeAsPNG, exportNodeAsSVG } from '@/utils/exportChart'
 import { scrollTo } from '@/utils/nav'
 import { plotFromSession } from '@/api'
 
+/**
+* Results
+* -------
+* Visualises a bandit run with manual interaction and two charts, KPI cards.
+*
+* High-level flow
+* - On play context changes, clear manual history and scroll to this section
+* - Derive environment/iteration info from either the finished RunResponse (`data`) or the live session (`playCtx`)
+* - Merge algorithm traces with an optional manual trace
+* - Compute chart series:
+* • `lines`: cumulative average reward/acceptance over time per strategy
+* • `barData`: action frequencies per strategy
+* • `summaryCards`: final average reward/acceptance per strategy for KPI tiles
+* - Provide export helpers (PNG/SVG) per chart using DOM refs
+* - Show the ManualPlay panel (left) and the results (right); if no data yet, offer a "Plot Results" button
+*
+* Props
+* - playCtx: live session context (algorithms, env, iterations, session_id)
+* - data: finished/aggregated traces from backend (RunResponse)
+* - setData: setter for `data` (used by onPlot)
+* - resetPlay: resets the live session in the parent
+*
+* Notes
+* - `dangerouslySetInnerHTML` is not used here; chart labels tooltips are pure strings
+* - `algoColors` and `algoNames` handle both built-ins and a manual series
+* - Guard against missing traces/empty series throughout to avoid runtime errors
+*/
+
 type ManualEv = { t: number; action: number; reward: number; accepted?: boolean }
+
 type Trace = { actions: number[]; rewards: number[] };
+
 type Traces = Record<string, Trace>;
 
 export function Results({
-  loading,
   playCtx,
   data,
   setData,
   resetPlay
 }: {
-  loading: boolean
   playCtx?: PlayCtx | null
   data: RunResponse | null
   setData: React.Dispatch<React.SetStateAction<RunResponse | null>>
   resetPlay: () => void
 }) {
+  // Local record of manual interactions
   const [manual, setManual] = useState<ManualEv[]>([])
   const hasManual = manual.length > 0
 
+  // Whenever the play context changes (new run), clear manual inputs and jump here
   useEffect(() => {
     setManual([])
     scrollTo("results")
   }, [playCtx])
 
-  // --- env + iterations sourced from whichever we have ---
+  // Derive environment + iterations from whichever source is available
   const envInfo: any = useMemo(() => {
     if (data) return (data as RunResponse).env
     if (playCtx) return playCtx!.data.env
@@ -46,25 +76,31 @@ export function Results({
     return 0
   }, [data, playCtx])
 
+  // Axis label depends on env type
   const envType = (envInfo.type as 'bernoulli' | 'gaussian' | undefined) ?? 'bernoulli'
   const isBernoulli = envType === 'bernoulli'
   const yLabel = isBernoulli ? 'Acceptance rate' : 'Average reward'
 
-  // ---- merge traces (algorithms + manual) ----
+  // Merge traces (algorithms from backend + manual)
   const mergedTraces: Traces = useMemo(() => {
     const base: Record<string, { actions: number[]; rewards: number[] }> =
       data ? (data as RunResponse).traces : {}
+
+    // Convert manual events to a trace if present
     const manualTrace = hasManual
       ? {
         actions: manual.map(m => m.action),
         rewards: manual.map(m => m.reward),
       }
       : null
+
     return { ...base, ...(manualTrace ? { manual: manualTrace } : {}) }
   }, [data, hasManual, manual])
 
+  // Series keys (algorithm ids + optional "manual")
   const keys = useMemo(() => Object.keys(mergedTraces), [mergedTraces])
 
+  // Build line series with cumulative averages at each timestep for each strategy
   const lines = useMemo(() => {
     if (keys.length === 0) return []
     const len = Math.max(...keys.map(k => mergedTraces[k].rewards.length))
@@ -82,23 +118,28 @@ export function Results({
     })
   }, [keys, mergedTraces])
 
+  // Build bar series of action counts per strategy
   const barData = useMemo(() => {
     const n = Number(envInfo.n_actions) || 0
     if (n === 0 || keys.length === 0) return []
-    // pre-count once per series
+
+    // Pre-count once per series for performance
     const countsBySeries: Record<string, number[]> = {}
     for (const k of keys) {
       const counts = Array(n).fill(0)
       for (const a of mergedTraces[k].actions) if (a >= 0 && a < n) counts[a] += 1
       countsBySeries[k] = counts
     }
+
     return Array.from({ length: n }, (_, a) => {
       const row: any = { action: `T${a + 1}` }
       for (const k of keys) row[k] = countsBySeries[k][a] ?? 0
       return row
     })
+
   }, [keys, mergedTraces, envInfo.n_actions])
 
+  // KPI tile data: final cumulative average per strategy
   const summaryCards = useMemo(() => {
     const out: Record<string, { final_avg_reward: number }> = {}
     for (const k of keys) {
@@ -111,16 +152,18 @@ export function Results({
     return out
   }, [keys, mergedTraces])
 
-  // ---- EXPORT: refs + helpers (only used when plotted) ----
+  // Export refs + helpers (only used when plotted)
   const lineRef = useRef<HTMLDivElement | null>(null)
   const barRef = useRef<HTMLDivElement | null>(null)
 
+  // Filename components: stable base plus an ISO-like timestamp without ':' or '.'
   const ts = useMemo(() => new Date().toISOString().replace(/[:.]/g, '-'), [])
   const base = useMemo(() => `${envInfo.type}-${envInfo.n_actions}a-${iterations}it`, [envInfo.type, envInfo.n_actions, iterations])
 
+  // Export helpers for the line chart
   const exportLinePNG = useCallback(async () => {
     if (!lineRef.current) return
-    await ExportNodeAsPNG(lineRef.current, {
+    await exportNodeAsPNG(lineRef.current, {
       width: 1920, height: 1080, background: '#ffffff', pixelRatio: 2,
       filename: `${base}-avg-reward-${ts}.png`
     })
@@ -131,16 +174,10 @@ export function Results({
     exportNodeAsSVG(lineRef.current, `${base}-avg-reward-${ts}.svg`)
   }, [base, ts])
 
-  const copyLinePNG = useCallback(async () => {
-    if (!lineRef.current) return
-    await copyNodeAsPNGToClipboard(lineRef.current, {
-      width: 1920, height: 1080, background: '#ffffff', pixelRatio: 2
-    })
-  }, [])
-
+  // Export helpers for the bar chart
   const exportBarPNG = useCallback(async () => {
     if (!barRef.current) return
-    await ExportNodeAsPNG(barRef.current, {
+    await exportNodeAsPNG(barRef.current, {
       width: 1920, height: 1080, background: '#ffffff', pixelRatio: 2,
       filename: `${base}-action-dist-${ts}.png`
     })
@@ -151,13 +188,7 @@ export function Results({
     exportNodeAsSVG(barRef.current, `${base}-action-dist-${ts}.svg`)
   }, [base, ts])
 
-  const copyBarPNG = useCallback(async () => {
-    if (!barRef.current) return
-    await copyNodeAsPNGToClipboard(barRef.current, {
-      width: 1920, height: 1080, background: '#ffffff', pixelRatio: 2
-    })
-  }, [])
-
+  // Friendly display names and colors per series (covers built-ins + manual)
   const algoNames: Record<string, string> = {
     greedy: "Greedy",
     epsilon_greedy: "ε-Greedy",
@@ -175,6 +206,7 @@ export function Results({
     manual: "#111827",
   }
 
+  // Handlers passed into ManualPlay: keep local state in sync with emitted events
   const handleSync = useCallback((hist: ManualEv[]) => setManual(hist), []);
   const handleEvent = useCallback((ev: ManualEv) => {
     setManual(prev => {
@@ -186,6 +218,7 @@ export function Results({
     });
   }, []);
 
+  // Fetch aggregated traces for the current session and store in parent state
   async function onPlot() {
     if (!playCtx) return
     const resp = await plotFromSession({
@@ -197,11 +230,10 @@ export function Results({
     setData(resp)
   }
 
-  // ---------- RENDER ----------
   return playCtx && (
     <section className="card card-pad w-4/5 scroll-mt-[72px]" id="results">
       <div className="flex gap-8 items-start md:grid-cols-2">
-        {/* left column: manual tester */}
+        {/* Left column: interactive manual tester */}
         <div className="space-y-2 flex-1">
           <ManualPlay
             playCtx={playCtx}
@@ -211,22 +243,17 @@ export function Results({
             resetPlay={resetPlay}
           />
         </div>
-        {loading && <div className="text-zinc-600">Running…</div>}
-        {!loading && !playCtx && !data && !hasManual && (
-          <div className="text-zinc-600">No run yet.</div>
-        )}
 
-        {/* right column: results */}
+        {/* Right column: charts + KPIs */}
         {data ? (
           <div className="space-y-8 flex-1 ">
             {/* LINE CHART*/}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold">{yLabel} over time</div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mr-4">
                   <button type="button" className="btn-subtle" onClick={exportLinePNG} title="Download PNG (1920×1080)">PNG</button>
                   <button type="button" className="btn-subtle" onClick={exportLineSVG} title="Download SVG">SVG</button>
-                  <button type="button" className="btn-subtle" onClick={copyLinePNG} title="Copy PNG to clipboard">Copy</button>
                 </div>
               </div>
               <div className="h-64 card" ref={lineRef}>
@@ -236,7 +263,6 @@ export function Results({
                       <XAxis dataKey="t" tickFormatter={(t) => `Kunde ${t}`} />
                       <YAxis
                         domain={isBernoulli ? [0, 1] : ['auto', 'auto']}
-                      // tickFormatter={(v) => isBernoulli ? `${Math.round((v as number) * 100)}%` : (v as number)}
                       />
                       <Tooltip
                         labelFormatter={(t) => `Kunde ${t}`}
@@ -259,10 +285,9 @@ export function Results({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold">Toppings angeboten (Häufigkeit)</div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mr-4">
                   <button type="button" className="btn-subtle" onClick={exportBarPNG} title="Download PNG (1920×1080)">PNG</button>
                   <button type="button" className="btn-subtle" onClick={exportBarSVG} title="Download SVG">SVG</button>
-                  <button type="button" className="btn-subtle" onClick={copyBarPNG} title="Copy PNG to clipboard">Copy</button>
                 </div>
               </div>
               <div className="h-64 card" ref={barRef}>
@@ -286,7 +311,7 @@ export function Results({
             </div>
 
 
-            {/* KPI */}
+            {/* KPI tiles */}
             <div className="space-y-2">
               <div className="text-lg font-semibold">Leistung je Strategie</div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -307,8 +332,9 @@ export function Results({
             </div>
           </div>
         ) :
+          // No aggregated data yet: allow the user to compute/plot results from the session
           <div className="flex-1 h-[50rem] flex justify-center items-center" >
-            <button className="btn" onClick={onPlot} disabled={loading}>Plot Results</button>
+            <button className="btn" onClick={onPlot}>Plot Results</button>
           </div>
         }
       </div>

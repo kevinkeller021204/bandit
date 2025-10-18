@@ -1,5 +1,17 @@
-// src/components/NumberStepper.tsx
+// src/layout/NumberStepper.tsx
 import { useEffect, useRef } from "react";
+
+/**
+* NumberStepper
+* -------------
+* Accessible numeric input with +/- controls and optional press-and-hold repeat.
+*
+* Features
+* - Enforces min/max/step and clamps on every update
+* - Keyboard shortcuts: ↑/↓ to step, Home/End to jump to min/max
+* - Pointer hold: configurable repeat via `holdSpeedMs`
+* - Works as a controlled input (`value` + `onChange`)
+*/
 
 type Props = {
     label?: string;
@@ -16,6 +28,9 @@ type Props = {
     required?: boolean;
 };
 
+
+
+
 export function NumberStepper({
     label,
     id,
@@ -30,15 +45,20 @@ export function NumberStepper({
     holdSpeedMs,
     required = true
 }: Props) {
+    // Interval ids for press-and-hold (kept separate for +/-)
     const decHold = useRef<number | null>(null);
     const incHold = useRef<number | null>(null);
+
+    // Coerce undefined to 0 for arithmetic; display logic still guards for NaN
     const valueToUse = value ?? 0;
+
+    // Helpers: clamp -> set, then +/- by step
     const clamp = (n: number) => Math.max(min, Math.min(max, n));
     const set = (n: number) => onChange(clamp(n));
     const inc = () => set(valueToUse + step);
     const dec = () => set(valueToUse - step);
 
-    // stop intervals on unmount
+    // Stop intervals on unmount (and avoid leaks)
     useEffect(() => {
         return () => {
             if (decHold.current) clearInterval(decHold.current);
@@ -46,6 +66,7 @@ export function NumberStepper({
         };
     }, []);
 
+    // Start/stop hold repeat for pointer interactions
     const startHold = (type: "inc" | "dec") => {
         if (!holdSpeedMs) return;
         const ref = type === "inc" ? incHold : decHold;

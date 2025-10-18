@@ -1,3 +1,4 @@
+// src/layout/CustomAlgoUpload.tsx
 import { useRef, useState } from 'react';
 import { uploadAlgorithm } from '@/api';
 import type { UploadedAlgorithm } from '@/types';
@@ -64,8 +65,7 @@ export default function CustomAlgoUpload({
 
   return (
     <div className="space-y-3">
-      <div className="label">Add custom algorithm</div>
-
+      
       {/* Hidden native input */}
       <input
         ref={inputRef}
@@ -77,7 +77,7 @@ export default function CustomAlgoUpload({
 
       {/* One button only */}
       <button className="btn w-42" onClick={onButtonClick} disabled={busy}>
-        {busy ? 'Uploading…' : file ? `Upload ${file.name}` : 'Upload algorithm'}
+        {busy ? 'Uploading…' : file ? `Upload ${file.name}` : 'Upload'}
       </button>
 
       {/* Optional details shown only after a file is chosen */}

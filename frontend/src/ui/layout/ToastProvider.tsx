@@ -1,6 +1,18 @@
-// src/components/toast/ToastProvider.tsx
+// src/layout/ToastProvider.tsx
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+/**
+* ToastProvider + useToast
+* ------------------------
+* App-wide toast system with a small API and a capped queue.
+*
+* Highlights
+* - Context exposes: toast(), success(), error(), info(), dismiss(), clear()
+* - At most MAX_TOASTS are visible at once; oldest are dropped when over capacity
+* - Each toast auto-dismisses after `duration` ms; manual close button included
+* - Viewport is portaled to <body> and uses aria-live for assistive tech
+*/
 
 type ToastVariant = "default" | "success" | "error" | "info";
 
@@ -11,8 +23,10 @@ export type ToastOptions = {
   duration?: number; // ms
 };
 
+// Concrete item stored in state (all fields required) + creation timestamp
 type ToastItem = Required<ToastOptions> & { createdAt: number };
 
+// Public API for consumers via useToast()
 type ToastContextValue = {
   toast: (opts: ToastOptions | string) => string;
   dismiss: (id: string) => void;
@@ -22,14 +36,16 @@ type ToastContextValue = {
   info: (msg: string, opts?: Omit<ToastOptions, "message" | "variant">) => string;
 };
 
-const MAX_TOASTS = 3; // ⬅️ cap visible toasts
+const MAX_TOASTS = 3; // cap visible toasts
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
+  // Keep timeout handles to cancel when a toast is dismissed early
   const timeouts = useRef<Map<string, number>>(new Map());
 
+  /** Remove a toast (and cancel its auto-dismiss if pending). */
   const dismiss = useCallback((id: string) => {
     setItems(xs => xs.filter(t => t.id !== id));
     const handle = timeouts.current.get(id);
@@ -39,6 +55,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /** Core creator: builds a ToastItem, trims queue, schedules auto-dismiss, returns id. */
   const push = useCallback(
     (opts: ToastOptions | string): string => {
       const next: ToastItem = {
@@ -68,6 +85,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [dismiss]
   );
 
+  // Variant helpers
   const success = useCallback(
     (msg: string, opts?: Omit<ToastOptions, "message" | "variant">) => push({ ...opts, message: msg, variant: "success" }),
     [push]
@@ -81,6 +99,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [push]
   );
 
+  // Memoized context value
   const value = useMemo(
     () => ({ toast: push, dismiss, clear: () => setItems([]), success, error, info }),
     [push, dismiss, success, error, info]
@@ -94,14 +113,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Hook to access the toast API */
 export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error("useToast must be used within <ToastProvider>");
   return ctx;
 }
 
-/* ---------- Internal UI ---------- */
-
+/** Container for toasts */
 function ToastViewport({
   items,
   onDismiss,
@@ -113,7 +132,6 @@ function ToastViewport({
     <div
       aria-live="polite"
       aria-atomic="true"
-      // ⬇️ bottom-right, newest at the bottom using flex-col-reverse (stack grows upward)
       className="fixed bottom-4 right-4 z-[9999] flex w-[min(92vw,24rem)] flex-col-reverse gap-2"
     >
       {items.map(t => (
@@ -123,6 +141,7 @@ function ToastViewport({
   );
 }
 
+/** Visual for a single toast with variant styling and a close button. */
 function Toast({
   item,
   onClose,
@@ -142,7 +161,6 @@ function Toast({
       role="status"
       className={[
         "pointer-events-auto overflow-hidden rounded-lg border shadow-sm",
-        // if you use Tailwind animate utils, you can swap to: 'animate-in fade-in slide-in-from-bottom-2'
         palette[item.variant],
       ].join(" ")}
     >

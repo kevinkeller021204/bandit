@@ -1,8 +1,30 @@
-// src/components/ManualPlay.tsx
+// src/ManualPlay.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EnvInfo, PlayCtx } from "@/types";
 import { playLog, playReset, playStep } from "@/api";
 import { scrollTo } from "@/utils/nav";
+
+/**
+* ManualPlay
+* ------------------------
+* Interactive panel to "manually" pull arms (pick toppings) .
+*
+* Simplified design:
+* - No local/demo environment, no RNG, no Gaussian sampling.
+* - All state comes from the server via `playLog`, `playStep`, and `playReset`.
+* - The component derives labels, progress, and quick feedback from that server truth.
+*
+* Responsibilities
+* - Fetch the current session state (env, iterations, history) on mount/update.
+* - Send steps to the server when a topping is clicked and append the returned event.
+* - Reset input history on the server and re-sync when requested.
+* - Bubble chronological events to the parent via `onSync` (for charts/KPIs).
+*
+* UX/Perf notes
+* - The visible log is newest-first (easier to scan). We still provide chronological history upward.
+* - Log is capped to 500 entries to bound DOM size.
+* - Topping labels are generated from a static list and remain stable for a given `n_actions`.
+*/
 
 /** list of 100 topping base names used to generate N labels */
 export const BASE_TOPPINGS = [
@@ -75,34 +97,32 @@ export default function ManualPlay({
   resetPlay
 }: ManualPlayProps) {
 
-  // ---- derive stable inputs from playCtx
-  const sessionId = playCtx.data.session_id
-  const nActions = playCtx.n_actions
-  const env = playCtx.data.env
-  const seed = (playCtx.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0;
-  const useBackend = (mode === "backend") || (mode === "auto" && !!sessionId);
+  // ---- derive inputs from playCtx (backend only) ----
+  const sessionId = playCtx.data.session_id;
+  const nActions = playCtx.n_actions;
 
-  // ---- local state
+  // ---- local UI state ----
   const [backendEnv, setBackendEnv] = useState<EnvInfo | null>(null);
-  const [iterations, setIterations] = useState<number>(playCtx.data.iterations ?? 1000);
-  const [t, setT] = useState<number>(1);
-  const [log, setLog] = useState<{ t: number; a: number; r: number; ok?: boolean }[]>([]);
+  const [iterations, setIterations] = useState<number>(playCtx.data.iterations ?? 0);
+  const [t, setT] = useState<number>(1); // current timestep (1-based)
+  const [log, setLog] = useState<{ t: number; a: number; r: number; ok?: boolean }[]>([]); // newest first
   const [last, setLast] = useState<{ t: number; a: number; r: number; ok?: boolean } | null>(null);
-  const [showTruth, setShowTruth] = useState(false);
+  const [showTruth, setShowTruth] = useState(false); // reveals env params per topping
   const [loading, setLoading] = useState(false);
   const onSyncRef = useRef<typeof onSync>();
   useEffect(() => { onSyncRef.current = onSync }, [onSync]);
 
 
-  // ---- initial sync from server
+  // ---- initial sync from server ----
   useEffect(() => {
     let cancel = false;
     async function init() {
-      if (!useBackend || !sessionId) return;
+      if (!sessionId) return; // nothing to load
       try {
         const info = await playLog(sessionId);
         if (cancel) return;
-        // normalize env payload to a typed object we can render easily
+
+        // Normalize env payload to a typed object we can render easily
         const env = info.env.type === "bernoulli"
           ? { type: "bernoulli" as const, n_actions: info.env.n_actions, p: info.env.p ?? [] }
           : { type: "gaussian" as const, n_actions: info.env.n_actions, means: info.env.means ?? [], stds: info.env.stds ?? [] };
@@ -111,14 +131,14 @@ export default function ManualPlay({
         setIterations(info.iterations);
         setT(Math.max(1, info.t + 1));
 
-        // newest-first in UI; charts want chronological, we'll send both ways
+        // Newest-first in UI; charts want chronological, we'll send both ways
         const uiHist = [...info.history].reverse().map(h => ({
           t: h.t, a: h.action, r: h.reward, ok: h.accepted,
         }));
         setLog(uiHist);
         setLast(uiHist[0] ?? null);
 
-        // ★ notify parent with chronological history
+        // Bubble chronological history upward for charts/KPIs
         const chrono = [...info.history].map(h => ({
           t: h.t, action: h.action, reward: h.reward, accepted: h.accepted,
         })).sort((a, b) => a.t - b.t);
@@ -131,90 +151,70 @@ export default function ManualPlay({
     return () => { cancel = true; };
   }, [sessionId]);
 
-  // Fallback local env
+  // ---- derived UI helpers ----
+  // Prefer backendEnv.n_actions once available
   const N = backendEnv?.n_actions ?? nActions;
   const toppings = useMemo(() => buildToppings(N), [N]);
   const T = iterations;
-  const rand = useMemo(() => mulberry32(seed), [seed]);
-  const localEnv = useMemo(() => {
-    if (useBackend && backendEnv) return null;
-    if (env.type === "bernoulli") {
-      return { kind: "bernoulli" as const, probs: Array.from({ length: N }, () => 0.25 + rand() * 0.65) };
-    }
-    return { kind: "gaussian" as const, means: Array.from({ length: N }, () => 0.3 + rand() * 1.0), std: 0.25 };
-  }, [useBackend, backendEnv, env, N, rand]);
 
+  /** Handle a user picking arm */
   async function pick(a: number) {
-    if (t > T) return;
+    if (!sessionId || !backendEnv) return; // guard if session is missing or not yet synced
+    if (t > T) return; // stop after budget exhausted
 
-    if (useBackend && sessionId && backendEnv) {
-      try {
-        setLoading(true);
-        const res = await playStep(sessionId, a);
-        const item = { t: res.t, a, r: res.reward, ok: res.accepted };
-        setLog(prev => [item, ...prev].slice(0, 500));
-        setLast(item);
-        setT(res.t + 1);
+    try {
+      setLoading(true);
+      const res = await playStep(sessionId, a);
+      const item = { t: res.t, a, r: res.reward, ok: res.accepted };
+      setLog(prev => [item, ...prev].slice(0, 500));
+      setLast(item);
+      setT(res.t + 1);
 
-        onEvent?.({ t: res.t, action: a, reward: res.reward, accepted: res.accepted });
-      } catch (e) {
-        console.error("playStep failed:", e);
-      } finally {
-        setLoading(false);
-      }
-      return;
+      onEvent?.({ t: res.t, action: a, reward: res.reward, accepted: res.accepted });
+    } catch (e) {
+      console.error("playStep failed:", e);
+    } finally {
+      setLoading(false);
     }
-
-    let r = 0, ok: boolean | undefined;
-    if (localEnv?.kind === "bernoulli") { ok = rand() < localEnv.probs[a]; r = ok ? 1 : 0; }
-    else if (localEnv?.kind === "gaussian") { r = sampleNormal(rand, localEnv.means[a], localEnv.std); }
-    const item = { t, a, r, ok };
-    setLog(prev => [item, ...prev].slice(0, 500));
-    setLast(item);
-    setT(x => x + 1);
-    onEvent?.({ t, action: a, reward: r, accepted: ok });
   }
 
+  /** Reset only the interaction history on the **server**, then re-sync */
   async function reset() {
-    if (useBackend && sessionId) {
-      try {
-        setLoading(true);
-        await playReset(sessionId);                 // ← reset on server
-        const info = await playLog(sessionId);      // ← re-sync from clean state
+    if (!sessionId) return;
+    try {
+      setLoading(true);
+      await playReset(sessionId); // ← reset on server
+      const info = await playLog(sessionId); // ← re-sync from clean state
 
-        setIterations(info.iterations);
-        setT(Math.max(1, info.t + 1));             // becomes 1 after reset
-        const uiHist = [...info.history].reverse().map(h => ({
-          t: h.t, a: h.action, r: h.reward, ok: h.accepted,
-        }));
-        setLog(uiHist);
-        setLast(uiHist[0] ?? null);
 
-        const chrono = info.history.map(h => ({
-          t: h.t, action: h.action, reward: h.reward, accepted: h.accepted,
-        }));
-        onSync?.(chrono);                           // let charts know history is empty
-      } catch (e) {
-        console.error("reset failed:", e);
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // local fallback
-      setT(1);
-      setLog([]);
-      setLast(null);
-      onSync?.([]);
+      setIterations(info.iterations);
+      setT(Math.max(1, info.t + 1)); // becomes 1 after reset
+      const uiHist = [...info.history].reverse().map(h => ({ t: h.t, a: h.action, r: h.reward, ok: h.accepted }));
+      setLog(uiHist);
+      setLast(uiHist[0] ?? null);
+
+
+      const chrono = info.history.map(h => ({ t: h.t, action: h.action, reward: h.reward, accepted: h.accepted }));
+      onSync?.(chrono); // let charts know history is empty
+    } catch (e) {
+      console.error("reset failed:", e);
+    } finally {
+      setLoading(false);
     }
   }
 
+  /** Reset the entire session (parent-owned) and navigate back to selection */
   function resetHard() {
-    resetPlay()
-    scrollTo("selection")
+    resetPlay();
+    scrollTo("selection");
   }
 
+  // Effective env kind used for conditionals/tooltips (always from backend now)
   const envKind: "bernoulli" | "gaussian" =
-    backendEnv?.type ?? (localEnv?.kind ?? (env.type as "bernoulli" | "gaussian"));
+    (backendEnv?.type ?? (playCtx.data.env.type as "bernoulli" | "gaussian"));
+
+
+  const sessionMissing = !sessionId;
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -223,12 +223,12 @@ export default function ManualPlay({
         <div>
           <div className="text-lg font-semibold">Manual Topping Tester</div>
           <p className="text-sm text-zinc-600">
-            {useBackend ? "Live session from server." : "Local demo mode."}
+            {sessionMissing ? "No active session." : "Live session from server."}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-zinc-600">Customer {Math.min(t, T)} / {T}</span>
-          <button className="btn" onClick={reset} disabled={loading}>Reset Input</button>
+          <button className="btn" onClick={reset} disabled={loading || sessionMissing}>Reset Input</button>
           <button className="btn" onClick={resetHard} disabled={loading}>Reset Session</button>
           {onClose && <button className="btn" onClick={onClose}>Close</button>}
         </div>
@@ -244,15 +244,13 @@ export default function ManualPlay({
           </label>
         </div>
 
-        { /* Format the log based on what model is selected */ }
+        {/* Topping grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 ">
           {Array.from({ length: N }).map((_, i) => {
             const truth =
               backendEnv?.type === "bernoulli" ? backendEnv.p?.[i] :
                 backendEnv?.type === "gaussian" ? backendEnv.means?.[i] :
-                  localEnv?.kind === "bernoulli" ? localEnv.probs?.[i] :
-                    localEnv?.kind === "gaussian" ? localEnv.means?.[i] :
-                      undefined;
+                  undefined;
 
             return (
               <button
@@ -274,7 +272,7 @@ export default function ManualPlay({
         </div>
       </div>
 
-      {/* Quick feedback */}
+      {/* Quick feedback cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="rounded border border-zinc-200 bg-white p-3">
           <div className="text-sm text-zinc-600">Last choice</div>
@@ -296,7 +294,7 @@ export default function ManualPlay({
         </div>
       </div>
 
-      {/* Log */}
+      {/* Event log (newest first) */}
       <div className="rounded border border-zinc-200 bg-white p-3">
         <div className="mb-2 font-semibold">Event log</div>
         <div className="h-[26rem] overflow-auto text-sm leading-6">

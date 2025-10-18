@@ -1,9 +1,24 @@
 import type {
-  PlayEndRequest, PlayEndResponse, PlayLogResponse, PlayResetRequest, PlayResetResponse, PlayStartRequest, PlayStartResponse,
-  PlayStepResponse, PlotFromSessionRequest, RunResponse, UploadedAlgorithm
+  PlayEndRequest, PlayEndResponse, PlayLogResponse, PlayResetRequest, PlayResetResponse, 
+  PlayStartRequest, PlayStartResponse, PlayStepResponse, PlotFromSessionRequest, 
+  RunResponse, UploadedAlgorithm
 } from '@/types'
 import { request } from './http';
 
+/**
+* API surface for the app
+* -----------------------
+* Thin wrappers around `request()` for all backend endpoints.
+* - Centralizes paths/methods/headers
+* - Strongly typed return values
+* - Keeps FormData pitfalls (no manual Content-Type) in one place
+*/
+
+
+/**
+* Upload a custom algorithm (.py or .zip) with associated metadata.
+* NOTE: do NOT set Content-Type when sending FormData; the browser sets the boundary.
+*/
 export async function uploadAlgorithm(
   file: File,
   meta: { name: string; language: "python"; entry: string; sha256: string }
@@ -23,6 +38,7 @@ export async function uploadAlgorithm(
   }
 }
 
+/** List all uploaded algorithms for the current user/session. */
 export async function listAlgorithms(): Promise<UploadedAlgorithm[]> {
   try {
     return await request<UploadedAlgorithm[]>("/api/algorithms");
@@ -32,7 +48,7 @@ export async function listAlgorithms(): Promise<UploadedAlgorithm[]> {
 }
 
 /* ---------------------------------- Play ----------------------------------- */
-
+/** Start a new play session with the given configuration. */
 export async function playStart(cfg: PlayStartRequest): Promise<PlayStartResponse> {
   try {
     return await request<PlayStartResponse>("/api/play/start", {
@@ -45,6 +61,7 @@ export async function playStart(cfg: PlayStartRequest): Promise<PlayStartRespons
   }
 }
 
+/** Submit one step (action selection) for an existing session. */
 export async function playStep(session_id: string, action: number): Promise<PlayStepResponse> {
   try {
     return await request<PlayStepResponse>("/api/play/step", {
@@ -57,6 +74,7 @@ export async function playStep(session_id: string, action: number): Promise<Play
   }
 }
 
+/** Fetch current session state: env, iteration budget, and history. */
 export async function playLog(session_id: string): Promise<PlayLogResponse> {
   try {
     const q = new URLSearchParams({ session_id }).toString();
@@ -66,6 +84,7 @@ export async function playLog(session_id: string): Promise<PlayLogResponse> {
   }
 }
 
+/** Gracefully end a session (server may finalize stats/cleanup). */
 export async function playEnd(session_id: string): Promise<PlayEndResponse> {
   try {
     return await request<PlayEndResponse>("/api/play/end", {
@@ -78,6 +97,7 @@ export async function playEnd(session_id: string): Promise<PlayEndResponse> {
   }
 }
 
+/** Reset a session to its initial state (clears server-side history). */
 export async function playReset(session_id: string): Promise<PlayResetResponse> {
   try {
     return await request<PlayResetResponse>("/api/play/reset", {
@@ -92,6 +112,10 @@ export async function playReset(session_id: string): Promise<PlayResetResponse> 
 
 /* --------------------------------- Plots ----------------------------------- */
 
+/**
+* Request aggregated traces/plots from a finished (or current) session.
+* The backend returns a unified RunResponse used by results charts/KPIs.
+*/
 export async function plotFromSession(payload: PlotFromSessionRequest): Promise<RunResponse> {
   try {
     return await request<RunResponse>("/api/plot", {

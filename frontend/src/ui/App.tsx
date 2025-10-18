@@ -6,7 +6,6 @@ import type { PlayCtx, RunResponse } from '@/types'
 import Header from './layout/Header'
 
 export default function App() {
-  const [loading, setLoading] = useState(false)
   const [playCtx, setPlayCtx] = useState<PlayCtx | null>(null)
   const [data, setData] = useState<RunResponse | null>(null)
 
@@ -32,7 +31,6 @@ export default function App() {
         {/* LEFT: Controls (creates a Play session and later triggers Plot) */}
         <section className="card card-pad w-2/5 scroll-mt-[72px]" id="selection">
           <Controls
-            onLoadingChange={setLoading}
             onPlayStarted={handlePlayStarted}
           />
         </section>
@@ -41,7 +39,6 @@ export default function App() {
         <Results
           data={data}
           setData={setData}
-          loading={loading}
           playCtx={playCtx}
           resetPlay={resetPlay}
         />

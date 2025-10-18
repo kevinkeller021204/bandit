@@ -1,3 +1,12 @@
+// src/utils/nav.ts
+/**
+* Smoothly scroll to an element by id, update the URL hash, and set focus for a11y.
+*
+* Behavior
+* 1) Updates the URL hash via history.pushState to avoid the browser's instant jump.
+* 2) Ensures the target is focusable and moves focus without scrolling (for screen readers/skip links).
+* 3) Performs a smooth scroll into view.
+*/
 export function scrollTo(id: string, opts?: ScrollIntoViewOptions) {
     const el = document.getElementById(id);
     if (!el) return;
