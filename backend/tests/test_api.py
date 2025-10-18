@@ -1,5 +1,5 @@
 import pytest
-from backend.app import app  # tests live in backend/, so import directly
+from backend.app import app  # dein Quart-App-Objekt
 
 @pytest.mark.asyncio
 async def test_health_ok():
@@ -9,69 +9,68 @@ async def test_health_ok():
     data = await resp.get_json()
     assert data["ok"] is True
     assert data["service"] == "epic-k-armed-bandit"
-    assert "version" in data
+    assert "version" in data  # 1 laut Code
 
 @pytest.mark.asyncio
-async def test_run_fallback_on_validation_error():
+async def test_play_start_and_step_bernoulli_happy_path():
     client = app.test_client()
-    # Bad env → triggers ValidationError branch → fallback config with empty_trace
-    resp = await client.post("/api/run", json={"env": "not-a-real-env"})
-    assert resp.status_code == 200
-    data = await resp.get_json()
 
-    assert data["iterations"] == 50   # fallback iterations
-    assert "empty_trace" in data["traces"]
-    rewards = data["traces"]["empty_trace"]["rewards"]
-    assert len(rewards) == 50
-    assert set(rewards) == {0.0}
-
-@pytest.mark.asyncio
-async def test_run_bernoulli_two_algos_shapes_and_types():
-    client = app.test_client()
+    # Start-Session
     payload = {
         "env": "bernoulli",
         "n_actions": 3,
-        "iterations": 20,
-        "algorithms": ["greedy", "epsilon_greedy"],
+        "iterations": 5,
         "seed": 123,
     }
-    resp = await client.post("/api/run", json=payload)
+    resp = await client.post("/api/play/start", json=payload)
     assert resp.status_code == 200
     data = await resp.get_json()
+    assert "session_id" in data and isinstance(data["session_id"], str)
+    assert data["t"] == 0
+    assert data["iterations"] == payload["iterations"]
 
     env = data["env"]
     assert env["type"] == "bernoulli"
-    assert env["n_actions"] == 3
-    assert len(env["p"]) == 3
+    assert env["n_actions"] == payload["n_actions"]
+    assert len(env["p"]) == payload["n_actions"]
 
-    for name in payload["algorithms"]:
-        assert name in data["traces"]
-        assert len(data["traces"][name]["actions"]) == payload["iterations"]
-        assert len(data["traces"][name]["rewards"]) == payload["iterations"]
-        # Bernoulli rewards must be 0/1
-        assert set(data["traces"][name]["rewards"]).issubset({0.0, 1.0})
+    sid = data["session_id"]
+
+    # Step-Schleife (immer Aktion 0)
+    done = False
+    for i in range(payload["iterations"]):
+        step = await client.post("/api/play/step", json={"session_id": sid, "action": 0})
+        assert step.status_code == 200
+        sd = await step.get_json()
+        assert sd["t"] == i + 1
+        assert sd["action"] == 0
+        assert sd["reward"] in (0.0, 1.0)  # Bernoulli
+        assert "done" in sd
+        # Bei Bernoulli setzt der Server "accepted"
+        assert "accepted" in sd
+        done = sd["done"]
+
+    assert done is True  # nach iterations Durchläufen
 
 @pytest.mark.asyncio
-async def test_run_gaussian_three_algos_shapes():
+async def test_play_step_invalid_session_404():
     client = app.test_client()
-    payload = {
-        "env": "gaussian",
-        "n_actions": 4,
-        "iterations": 15,
-        "algorithms": ["ucb1", "thompson", "gradient"],
-        "seed": 7,
-    }
-    resp = await client.post("/api/run", json=payload)
-    assert resp.status_code == 200
-    data = await resp.get_json()
+    step = await client.post("/api/play/step", json={"session_id": "does-not-exist", "action": 0})
+    assert step.status_code == 404
+    data = await step.get_json()
+    assert data.get("error") == "invalid session"
 
-    env = data["env"]
-    assert env["type"] == "gaussian"
-    assert len(env["means"]) == 4
-    assert len(env["stds"]) == 4
+@pytest.mark.asyncio
+async def test_play_step_action_out_of_range_400():
+    client = app.test_client()
 
-    for name in payload["algorithms"]:
-        assert name in data["traces"]
-        assert len(data["traces"][name]["actions"]) == payload["iterations"]
-        assert len(data["traces"][name]["rewards"]) == payload["iterations"]
-        assert all(isinstance(x, float) for x in data["traces"][name]["rewards"])
+    # gültige Session starten
+    start = await client.post("/api/play/start", json={"env": "gaussian", "n_actions": 4, "iterations": 2, "seed": 7})
+    assert start.status_code == 200
+    sid = (await start.get_json())["session_id"]
+
+    # ungültige Aktion: == n_actions
+    bad = await client.post("/api/play/step", json={"session_id": sid, "action": 4})
+    assert bad.status_code == 400
+    data = await bad.get_json()
+    assert data.get("error") == "action out of range"

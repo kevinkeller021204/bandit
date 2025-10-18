@@ -1,5 +1,5 @@
 import math
-from backend.app import Greedy, EpsilonGreedy, UCB1, ThompsonSampling, GradientBandit
+from backend.app import Greedy, EpsilonGreedy, UCB1, ThompsonSampling
 
 def test_greedy_update_and_select():
     algo = Greedy(3, seed=0)
@@ -35,10 +35,3 @@ def test_thompson_sampling_update_counters():
     a = algo.select_action()
     assert 0 <= a < 2
 
-def test_gradient_bandit_select_and_update_changes_preferences():
-    algo = GradientBandit(3, seed=0, alpha=0.1)
-    a = algo.select_action()
-    assert 0 <= a < 3
-    before = algo.preferences.copy()
-    algo.update(a, 1.0)
-    assert algo.preferences != before
