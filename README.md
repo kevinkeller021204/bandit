@@ -24,7 +24,7 @@ If you see “Bandit App is damaged” on first launch:
 2. Open repo (e.g. vs code)
 3. open terminal (in vs code)
 4. cd desktop
-5. npm install --save-dev electron > may take a while, ignore warnings
+5. npm install --save-dev electron [//]: # may take a while, ignore warnings
 6. npm run build
 7. npm start
 
@@ -33,10 +33,10 @@ If you see “Bandit App is damaged” on first launch:
 do not commit changes with IS_DEV = 1
 
 1. Set IS_DEV in app.py to 1 for proxy tunneling
-2. npm run build > (/frontend)
-3. npm run build > (/frontend)
-4. npm run dev > (/frontend)
-5. python(3) app.py > (in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
+2. npm run build [//]: # (/frontend)
+3. npm run build [//]: # (/frontend)
+4. npm run dev [//]: # (/frontend)
+5. python(3) app.py [//]: # (in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
 
 
 Have fun!
