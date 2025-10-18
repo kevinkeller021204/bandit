@@ -1,23 +1,49 @@
 <!doctype html>
 <html>
   <head>
-    <meta charset="utf-8">
+    <meta charset="utf-8"><title>Bandit App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root {
-        --violet:#6d28d9; --slate:#475569; --ink:#0f172a; --muted:#475569;
-        --border:#e2e8f0; --border-2:#cbd5e1; --shade:#e5e7eb;
+        --violet:#6d28d9; --slate:#475569; --ink:#0f172a; --muted:#64748b;
+        --border:#e2e8f0; --border-2:#cbd5e1; --shade:#e5e7eb; --bg:#f8fafc;
       }
       * { box-sizing:border-box; }
       html, body { height:100%; }
-      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 20px; color:#0f172a; margin:0; }
-      h2 { margin: 0 0 14px; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial; color:#0f172a; background:var(--bg); padding:20px; }
 
-      /* Topbar */
+      /* ---------- Landing (initial) ---------- */
+      .landing {
+        position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr; align-items:start;
+        justify-items:center; background:var(--bg);
+      }
+      .landing-header { margin-top:12px; text-align:center; }
+      .landing-header h1 { margin:0; font-size:24px; font-weight:800; }
+      .landing-header p  { margin:6px 0 0; font-size:13px; color:var(--muted); }
+      .landing-center {
+        display:grid; place-items:center; height:100%; width:100%;
+      }
+      .landing-cta {
+        display:flex; align-items:center; justify-content:center; gap:48px;
+      }
+      .landing .cta {
+        min-width:240px; padding:18px 20px; font-size:18px; border-radius:14px; border:0; color:#fff; cursor:pointer; background:var(--violet);
+        box-shadow:0 6px 20px rgba(109,40,217,.25);
+      }
+      .landing .cta.secondary { background:var(--slate); }
+      /* Landing ausblenden sobald App-UI aktiv ist */
+      body.ready .landing { display:none; }
+
+      /* ---------- App UI (versteckt bis ready) ---------- */
+      .app { display:none; }
+      body.ready .app { display:block; }
+
       .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
       .row { display:flex; gap:12px; align-items:center; }
       button { padding:10px 14px; border-radius:10px; border:0; background:var(--violet); color:#fff; cursor:pointer; }
       button.secondary { background:var(--slate); }
       button.small { padding:8px 10px; border-radius:8px; }
+      button[disabled]{ opacity:.6; pointer-events:none; }
       button:focus-visible { outline:3px solid rgba(124,58,237,.35); outline-offset:2px; }
 
       #status { margin-top:10px; color:#334155; min-height:1.2em; }
@@ -27,20 +53,15 @@
       .spin .spinner { display:inline-block; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      a { color:#2563eb; text-decoration:none; }
-      a:hover { text-decoration:underline; }
-
-      /* URL-Zeile */
       .url-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; padding:10px 12px; border:1px solid var(--shade); border-radius:10px; background:#fff; }
       .url-label { color:#475569; font-size:12px; }
       .url-link { max-width: 70vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-      /* Bühne */
       .stage { position:relative; margin-top:12px; height:70vh; }
       iframe { width:100%; height:100%; border:1px solid var(--shade); border-radius:12px; background:#fff; display:block; }
 
-      /* THEATER-MODUS: nur die Webapp projizieren */
-      body.theater { padding:0; }                 /* kein Außenabstand */
+      /* Theater-Modus (nur Web-App, kein OS-Fullscreen) */
+      body.theater { padding:0; }
       body.theater h2,
       body.theater .topbar,
       body.theater #urlRow,
@@ -48,7 +69,6 @@
       body.theater .stage { height:100vh; margin:0; }
       body.theater iframe { border:0; border-radius:0; }
 
-      /* Exit-Pill */
       .fs-exit {
         position:absolute; right:18px; bottom:18px; z-index:10;
         background:rgba(15,23,42,.72); color:#fff; border-radius:999px; padding:8px 12px;
@@ -59,202 +79,221 @@
       }
       .fs-exit svg { width:14px; height:14px; }
       body.theater .fs-exit { display:flex; }
-
-      /* Modal (ngrok) */
-      .modal.hidden { display:none; }
-      .modal { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; }
-      .modal__backdrop { position:absolute; inset:0; background:rgba(15, 23, 42, .45); backdrop-filter:saturate(120%) blur(2px); }
-      .modal__dialog {
-        position:relative; z-index:1; width:min(92vw, 420px);
-        background:#fff; color:var(--ink); border-radius:14px; padding:16px 14px;
-        box-shadow:0 20px 50px rgba(2,6,23,.25), 0 6px 18px rgba(2,6,23,.18);
-        border:1px solid var(--border);
-      }
-      .modal__header { margin-bottom:6px; }
-      .modal__header h3 { margin:0; font-size:16px; font-weight:700; letter-spacing:.2px; }
-      .modal__hint { margin:6px 0 12px; font-size:12px; color:#475569; }
-      .modal__input {
-        width:calc(100% - 4px); padding:8px 10px; border:1px solid var(--border-2); border-radius:8px;
-        font-family:ui-monospace, SFMono-Regular, Menlo, monospace; box-sizing:border-box;
-      }
-      .modal__input:focus { outline:none; border-color:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,.15); }
-      .modal__actions { display:flex; align-items:center; gap:8px; margin-top:14px; }
-      .modal .spacer { flex:1; }
     </style>
   </head>
   <body>
-    <h2>Bandit App</h2>
-
-    <!-- Top-Leiste -->
-    <div class="topbar">
-      <div class="row">
-        <button id="offline">Host offline</button>
-        <button id="online" class="secondary">Host online</button>
-        <button id="del-ngrok" class="secondary" style="display:none;">ngrok-Token löschen</button>
-        <div class="spinner" id="spin"></div>
+    <!-- ---------- Landing ---------- -->
+    <section class="landing" id="landing">
+      <div class="landing-header">
+        <h1>Bandit App</h1>
+        <p>Starte die App lokal oder teile sie online. Wähle eine Option, der Rest passiert automatisch.</p>
       </div>
-      <div class="row">
-        <button id="fullscreenBtn" class="secondary" title="Web-App projizieren">Vollbild</button>
-      </div>
-    </div>
-
-    <!-- ngrok Modal -->
-    <div id="ngrok-modal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="ngrok-title">
-      <div class="modal__backdrop"></div>
-      <div class="modal__dialog" role="document">
-        <div class="modal__header"><h3 id="ngrok-title">ngrok Authtoken</h3></div>
-        <p class="modal__hint">Melde dich bei ngrok an. Deinen persönlichen Authtoken findest du im Dashboard unter „Your Authtoken“.</p>
-        <input id="ngrok-input" type="text" class="modal__input" placeholder="xxxxxxxxxxxxxxxxxxxxxx" />
-        <div class="modal__actions">
-          <button id="ngrok-open" class="secondary" type="button">ngrok öffnen</button>
-          <div class="spacer"></div>
-          <button id="ngrok-cancel" type="button">Abbrechen</button>
-          <button id="ngrok-save" type="button">Speichern</button>
+      <div class="landing-center">
+        <div class="landing-cta">
+          <button id="landing-offline" class="cta">Host offline</button>
+          <button id="landing-online"  class="cta secondary">Host online</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Status (blendet sich weg, sobald URL gesetzt ist) -->
-    <div id="status"></div>
+    <!-- ---------- App UI (versteckt bis ready) ---------- -->
+    <section class="app" id="app">
+      <h2 style="text-align:left;margin:0 0 14px">Bandit App</h2>
 
-    <!-- URL + Kopieren -->
-    <div id="urlRow" class="url-row hidden">
-      <span class="url-label">Läuft unter:</span>
-      <a id="currentUrl" class="url-link" href="#" target="_blank" rel="noreferrer"></a>
-      <button id="copyUrl" class="small secondary" type="button">Kopieren</button>
-    </div>
+      <div class="topbar">
+        <div class="row">
+          <button id="offline">Host offline</button>
+          <button id="online" class="secondary">Host online</button>
+          <button id="del-ngrok" class="secondary" style="display:none;">ngrok-Token löschen</button>
+          <div class="spinner" id="spin"></div>
+        </div>
+        <div class="row">
+          <button id="fullscreenBtn" class="secondary" title="Web-App projizieren">Vollbild</button>
+        </div>
+      </div>
 
-    <!-- Bühne -->
-    <div class="stage" id="stage">
-      <iframe id="appframe" src="about:blank" title="Bandit App"></iframe>
+      <!-- ngrok Modal -->
+      <div id="ngrok-modal" class="modal hidden" aria-hidden="true" role="dialog" aria-labelledby="ngrok-title">
+        <div class="modal__backdrop"></div>
+        <div class="modal__dialog" role="document">
+          <div class="modal__header"><h3 id="ngrok-title">ngrok Authtoken</h3></div>
+          <p class="modal__hint">Melde dich bei ngrok an. Deinen Authtoken findest du im Dashboard.</p>
+          <input id="ngrok-input" type="text" class="modal__input" placeholder="xxxxxxxxxxxxxxxxxxxxxx" />
+          <div class="modal__actions">
+            <button id="ngrok-open" class="secondary" type="button">ngrok öffnen</button>
+            <div class="spacer"></div>
+            <button id="ngrok-cancel" type="button">Abbrechen</button>
+            <button id="ngrok-save" type="button">Speichern</button>
+          </div>
+        </div>
+      </div>
 
-      <!-- dezenter Exit-Pill -->
-      <button id="fsExit" class="fs-exit" type="button" title="Vollbild beenden">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        Vollbild beenden
-      </button>
-    </div>
+      <div id="status"></div>
+
+      <div id="urlRow" class="url-row hidden">
+        <span class="url-label">Läuft unter:</span>
+        <a id="currentUrl" class="url-link" href="#" target="_blank" rel="noreferrer"></a>
+        <button id="copyUrl" class="small secondary" type="button">Kopieren</button>
+      </div>
+
+      <div class="stage" id="stage">
+        <iframe id="appframe" src="about:blank" title="Bandit App"></iframe>
+
+        <button id="fsExit" class="fs-exit" type="button" title="Vollbild beenden">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Vollbild beenden
+        </button>
+      </div>
+    </section>
 
     <script>
-      // Elements
-      const spin         = document.getElementById('spin');
-      const statusEl     = document.getElementById('status');
-      const frame        = document.getElementById('appframe');
-      const btnDelNgrok  = document.getElementById('del-ngrok');
-      const fullscreenBtn= document.getElementById('fullscreenBtn');
-      const fsExit       = document.getElementById('fsExit');
+      // ---------- Helpers ----------
+      function withNgrokSkip(url) {
+        try { const u = new URL(url);
+          if (!u.searchParams.has('ngrok-skip-browser-warning'))
+            u.searchParams.set('ngrok-skip-browser-warning','true');
+          return u.toString();
+        } catch { return url; }
+      }
+      function setSpin(on){ document.body.classList.toggle('spin', !!on); }
+      function showStatus(msg){ const el = document.getElementById('status'); el.textContent = msg||''; el.classList.toggle('hidden', !msg); }
+      function clearStatus(){ showStatus(''); }
 
-      const urlRow       = document.getElementById('urlRow');
-      const currentUrlEl = document.getElementById('currentUrl');
-      const copyUrlBtn   = document.getElementById('copyUrl');
+      // Theater (nur Web-App, kein OS-Fullscreen)
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+      const fsExit        = document.getElementById('fsExit');
+      function enterTheater(){ document.body.classList.add('theater'); if(fullscreenBtn) fullscreenBtn.textContent='Vollbild beenden'; }
+      function exitTheater(){ document.body.classList.remove('theater'); if(fullscreenBtn) fullscreenBtn.textContent='Vollbild'; }
+      if (fullscreenBtn) fullscreenBtn.onclick = () => document.body.classList.contains('theater') ? exitTheater() : enterTheater();
+      if (fsExit) fsExit.onclick = () => exitTheater();
+
+      // ---------- State ----------
+      let mode = 'none';    // 'none' | 'offline' | 'online'
+      let busy = false;
       let lastUrl = '';
-      let didAutoTheater = false;
-      // Modal
+
+      function setBusy(v){
+        busy = v;
+        const onBtn  = document.getElementById('online');
+        const offBtn = document.getElementById('offline');
+        if (v) {
+          if (onBtn)  onBtn.disabled  = true;
+          if (offBtn) offBtn.disabled = true;
+          setSpin(true); showStatus('lädt…');
+        } else {
+          setSpin(false);
+          if (mode!=='none') showStatus('Status: '+mode); else clearStatus();
+        }
+      }
+      function lockTo(newMode){
+        mode = newMode;
+        const onBtn  = document.getElementById('online');
+        const offBtn = document.getElementById('offline');
+        if (!onBtn || !offBtn) return;
+        if (mode==='online'){ onBtn.disabled=true; offBtn.disabled=false; }
+        else if (mode==='offline'){ onBtn.disabled=false; offBtn.disabled=true; }
+        else { onBtn.disabled=false; offBtn.disabled=false; }
+      }
+      function setUrlRow(url){
+        lastUrl = url || '';
+        const row = document.getElementById('urlRow');
+        const a   = document.getElementById('currentUrl');
+        if (!lastUrl){ row.classList.add('hidden'); a.textContent=''; a.removeAttribute('href'); return; }
+        a.textContent = lastUrl; a.href = lastUrl; row.classList.remove('hidden');
+      }
+
+      // ---------- Landing -> sofort auf App-UI wechseln beim Klick ----------
+      function gotoAppUI(initialMode) {
+        document.body.classList.add('ready'); // Landing ausblenden, App zeigen
+        lockTo(initialMode);                  // aktiven Modus sofort sperren
+        setBusy(true);                        // beide Buttons busy während Start
+        // optional: sofort leeren
+        document.getElementById('appframe').src = "about:blank";
+      }
+
+      document.getElementById('landing-offline').onclick = () => {
+        if (busy) return;
+        gotoAppUI('offline');
+        window.bandit.send('host-offline');
+      };
+      document.getElementById('landing-online').onclick = () => {
+        if (busy) return;
+        gotoAppUI('online');
+        window.bandit.send('host-online');
+      };
+
+      // ---------- App Buttons ----------
+      document.getElementById('offline').onclick = () => {
+        if (busy || mode==='offline') return;
+        setBusy(true); document.getElementById('appframe').src = "about:blank";
+        window.bandit.send('host-offline');
+      };
+      document.getElementById('online').onclick = () => {
+        if (busy || mode==='online') return;
+        setBusy(true); document.getElementById('appframe').src = "about:blank";
+        window.bandit.send('host-online');
+      };
+      document.getElementById('copyUrl').onclick = async () => {
+        if (!lastUrl) return;
+        try { await navigator.clipboard.writeText(lastUrl);
+          const b=document.getElementById('copyUrl'); const t=b.textContent; b.textContent='Kopiert!'; setTimeout(()=>b.textContent=t,900);
+        } catch { alert('Kopieren fehlgeschlagen'); }
+      };
+
+      // ---------- Credentials UI (ngrok-Token löschen zurück) ----------
+      const btnDelNgrok = document.getElementById('del-ngrok');
+      window.bandit.on('credentials-status', (s) => { btnDelNgrok.style.display = s.ngrok ? '' : 'none'; });
+      window.bandit.on('credentials-changed', (d) => { if (typeof d.ngrok === 'boolean') btnDelNgrok.style.display = d.ngrok ? '' : 'none'; });
+      btnDelNgrok.onclick = () => { if (confirm('ngrok-Token wirklich löschen?')) window.bandit.send('delete-credentials', 'ngrok'); };
+
+      // ---------- ngrok Modal ----------
       const modal       = document.getElementById('ngrok-modal');
       const ngrokInput  = document.getElementById('ngrok-input');
       const ngrokOpen   = document.getElementById('ngrok-open');
       const ngrokSave   = document.getElementById('ngrok-save');
       const ngrokCancel = document.getElementById('ngrok-cancel');
+      function showModal(){ modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); setTimeout(()=>ngrokInput.focus(),0); }
+      function hideModal(){ modal.classList.add('hidden');   modal.setAttribute('aria-hidden','true'); }
+      window.bandit.on('need-ngrok-token', ()=>{ ngrokInput.value=''; showModal(); });
+      ngrokOpen.onclick   = ()=> window.bandit.send('open-external','https://dashboard.ngrok.com/get-started/your-authtoken');
+      ngrokSave.onclick   = ()=> { const v=ngrokInput.value.trim(); if(!v){alert('Bitte Token eintragen'); return;} hideModal(); window.bandit.send('set-ngrok-token', v); showStatus('Token gespeichert. Starte ngrok …'); };
+      ngrokCancel.onclick = ()=> { hideModal(); showStatus('ngrok abgebrochen.'); };
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && !modal.classList.contains('hidden')) hideModal(); });
 
-      // Helpers
-      function setSpin(on){ document.body.classList.toggle('spin', !!on); }
-      function showModal(){ modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); setTimeout(()=> ngrokInput.focus(), 0); }
-      function hideModal(){ modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
-      function clearStatus(){ statusEl.textContent=''; statusEl.classList.add('hidden'); }
-      function showStatus(msg){ statusEl.textContent = msg; statusEl.classList.remove('hidden'); }
+      // ---------- IPC vom Main ----------
+      window.bandit.on('status', (msg)=> { if (!busy && !lastUrl) showStatus(msg); });
 
-      // Startup
+      // Lokale URL fertig
+      window.bandit.on('open-url', (url)=> {
+        const safe = withNgrokSkip(url);
+        document.body.classList.add('ready');      // falls noch Landing sichtbar
+        setUrlRow(safe);
+        const frame = document.getElementById('appframe');
+        frame.src = safe;
+        enterTheater();          // automatisch Web-App groß
+        lockTo('offline');       // aktiver Modus bleibt grau
+        setBusy(false);
+        showStatus('Status: offline');
+      });
+
+      // Öffentliche URL fertig
+      window.bandit.on('public-url', (url)=> {
+        const safe = withNgrokSkip(url);
+        document.body.classList.add('ready');
+        setUrlRow(safe);
+        const frame = document.getElementById('appframe');
+        frame.src = safe;
+        enterTheater();
+        lockTo('online');
+        setBusy(false);
+        showStatus('Status: online');
+      });
+
+      window.bandit.on('ui:state', (m)=> { lockTo(m); if (document.body.classList.contains('ready')) setBusy(false); });
+      window.bandit.on('error', (msg)=> { setBusy(false); showStatus('Fehler: ' + msg); });
+
+      // Initial: nur Credentials prüfen, Landing bleibt sichtbar
       window.bandit.send('check-credentials');
-
-      // Credentials UI
-      window.bandit.on('credentials-status', (s) => { btnDelNgrok.style.display = s.ngrok ? '' : 'none'; });
-      window.bandit.on('credentials-changed', (d) => { if (typeof d.ngrok === 'boolean') btnDelNgrok.style.display = d.ngrok ? '' : 'none'; });
-      btnDelNgrok.onclick = () => { if (confirm('ngrok-Token wirklich löschen?')) window.bandit.send('delete-credentials', 'ngrok'); };
-
-      // ngrok modal
-      window.bandit.on('need-ngrok-token', () => { ngrokInput.value = ''; showModal(); });
-      ngrokOpen.onclick   = () => window.bandit.send('open-external', 'https://dashboard.ngrok.com/get-started/your-authtoken');
-      ngrokSave.onclick   = () => {
-        const val = ngrokInput.value.trim();
-        if (!val) { alert('Bitte Token eintragen'); return; }
-        hideModal(); window.bandit.send('set-ngrok-token', val);
-        showStatus('Token gespeichert. Starte ngrok …');
-      };
-      ngrokCancel.onclick = () => { hideModal(); showStatus('ngrok abgebrochen.'); };
-      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.classList.contains('hidden')) hideModal(); });
-
-      // Host controls
-      document.getElementById('offline').onclick = () => {
-        setSpin(true); clearUrlRow(); frame.src = "about:blank";
-        window.bandit.send('host-offline');
-      };
-      document.getElementById('online').onclick = () => {
-        setSpin(true); clearUrlRow(); frame.src = "about:blank";
-        window.bandit.send('host-online');
-      };
-
-      // IPC listeners
-      window.bandit.on('status', (msg)=> {
-        if (!lastUrl) showStatus(msg);
-        if (msg.toLowerCase().includes("bereit")) setSpin(false);
-      });
-
-      window.bandit.on('open-url', (url)=> { // lokale App-URL
-        setUrlRow(url);
-        frame.src = url;
-        setSpin(false);
-        clearStatus();
-      });
-
-      window.bandit.on('public-url', (url)=> { // öffentliche URL
-        setUrlRow(url);
-        clearStatus();
-      });
-
-      window.bandit.on('error', (msg)=> { setSpin(false); showStatus("Fehler: " + msg); });
-
-      // URL helpers
-      function setUrlRow(url){
-        lastUrl = url || '';
-        if (!lastUrl) { clearUrlRow(); return; }
-        currentUrlEl.textContent = lastUrl;
-        currentUrlEl.href = lastUrl;
-        urlRow.classList.remove('hidden');
-        if (!didAutoTheater) {
-          didAutoTheater = true;
-          setTimeout(() => toggleTheater(true), 120);
-        }
-      }
-      function clearUrlRow(){
-        lastUrl = '';
-        urlRow.classList.add('hidden');
-        currentUrlEl.textContent = '';
-        currentUrlEl.removeAttribute('href');
-      }
-      copyUrlBtn.onclick = async () => {
-        if (!lastUrl) return;
-        try {
-          await navigator.clipboard.writeText(lastUrl);
-          const old = copyUrlBtn.textContent;
-          copyUrlBtn.textContent = 'Kopiert!';
-          setTimeout(()=> copyUrlBtn.textContent = old, 900);
-        } catch {
-          alert('Kopieren fehlgeschlagen');
-        }
-      };
-
-      // THEATER-MODUS (nur Web-App projizieren)
-      let theater = false;
-      const toggleTheater = (on) => {
-        theater = (typeof on === 'boolean') ? on : !theater;
-        document.body.classList.toggle('theater', theater);
-        fullscreenBtn.textContent = theater ? 'Vollbild beenden' : 'Vollbild';
-      };
-      fullscreenBtn.onclick = () => toggleTheater();
-      fsExit.onclick        = () => toggleTheater(false);
-      
-
-
     </script>
   </body>
 </html>

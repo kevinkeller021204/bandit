@@ -50,7 +50,6 @@ const ALGO_INFO_HTML: Record<string, string> = {
   `,
 };
 
-
 type ControlsProps = {
   onLoadingChange?: (loading: boolean) => void
   onPlayStarted?: (playCtx: PlayCtx) => void
@@ -131,11 +130,10 @@ export function Controls({
             id={`algo-info-${"pizza-topping-bandit"}`}
             className="mt-2 rounded bg-zinc-50 p-3 text-sm basis-full"
             dangerouslySetInnerHTML={{
-              __html: `<p className="text-sm text-zinc-600"> Choose how many <strong>topping options</strong> you offer and which <strong>recommendation strategies</strong> to try.</p>`,
+              __html: `<p class="text-sm text-zinc-600">Choose how many <strong>topping options</strong> you offer and which <strong>recommendation strategies</strong> to try.</p>`,
             }}
           />
         )}
-        {/*  */}
       </div>
 
       <div className="grid grid-cols-2 gap-x-[4rem] gap-y-4 justify-items-stretch">
@@ -247,14 +245,40 @@ export function Controls({
         </div>
       </div>
 
-      {/* inline uploader; once uploaded, its checkbox will appear above */}
-      <div className="mt-2">
+      {/* Upload-Bereich mit Info-Button */}
+      <div className="mt-2 space-y-2">
+        <div className="space-y-1 flex flex-wrap items-center">
+          <div className="text-lg font-semibold p-2">Upload algorithm</div>
+          <button
+            type="button"
+            className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
+            title="Erklärung anzeigen"
+            onClick={() => toggleInfo('upload')}
+            aria-expanded={openInfo === 'upload'}
+            aria-controls="algo-info-upload"
+          >
+            ?
+          </button>
+          {openInfo === 'upload' && (
+            <div
+              id="algo-info-upload"
+              className="mt-2 rounded bg-zinc-50 p-3 text-sm basis-full"
+              dangerouslySetInnerHTML={{
+                __html: `<p class="text-sm text-zinc-600">
+                  Bitte orientiere dich beim Implementieren an unserem Beispielalgorithmus auf GitHub,
+                  im Ordner <strong>„Example Algorithm“</strong>.
+                </p>`,
+              }}
+            />
+          )}
+        </div>
+
+        {/* inline uploader; once uploaded, its checkbox will appear above */}
         <CustomAlgoUpload onUploaded={onUploadedAlgo} />
       </div>
 
       {/* RUN SECTION */}
       <div className="space-y-3">
-        {/* <div className="label">Kunden bedienen</div> CHANGED (was: Execute simulation) */}
         <div className="flex gap-2 justify-center">
           <button className="btn-lg" onClick={onPlay}>Kunden bedienen</button>
         </div>
