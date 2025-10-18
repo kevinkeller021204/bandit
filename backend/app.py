@@ -310,7 +310,7 @@ def _gc(now: float | None = None):
 # Frontend serving (dev vs prod)
 # -----------------------------------------------------------------------------
 
-IS_DEV = os.environ.get("VITE_DEV", "0") == "1"
+IS_DEV = os.environ.get("VITE_DEV", "0") == "0"
 VITE_URL = os.environ.get("VITE_URL", "http://localhost:5173")
 
 app = cors(Quart(__name__), allow_origin="*", allow_headers="*", allow_methods=["GET", "POST", "OPTIONS"])
