@@ -17,7 +17,7 @@ body {
   @apply font-sans text-zinc-900;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.97)),
-    url("./assets/pizza-background.jpg");
+    url("/pizza-background.jpg");
   background-size: cover;
   /* or: contain | 150% 150% | 1200px auto */
   background-position: center;
