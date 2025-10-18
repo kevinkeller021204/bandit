@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayCtx, RunResponse } from '@/types'
 import ManualPlay from './ManualPlay'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { exportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './exportChart'
+import { ExportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './layout/ExportChart'
 import { scrollTo } from '@/utils/nav'
 import { plotFromSession } from '@/api'
 
@@ -14,13 +14,15 @@ type Traces = Record<string, Trace>;
 export function Results({
   loading,
   playCtx,
-  data, 
-  setData
+  data,
+  setData,
+  resetPlay
 }: {
   loading: boolean
   playCtx?: PlayCtx | null
   data: RunResponse | null
   setData: React.Dispatch<React.SetStateAction<RunResponse | null>>
+  resetPlay: () => void
 }) {
   const [manual, setManual] = useState<ManualEv[]>([])
   const hasManual = manual.length > 0
@@ -118,7 +120,7 @@ export function Results({
 
   const exportLinePNG = useCallback(async () => {
     if (!lineRef.current) return
-    await exportNodeAsPNG(lineRef.current, {
+    await ExportNodeAsPNG(lineRef.current, {
       width: 1920, height: 1080, background: '#ffffff', pixelRatio: 2,
       filename: `${base}-avg-reward-${ts}.png`
     })
@@ -138,7 +140,7 @@ export function Results({
 
   const exportBarPNG = useCallback(async () => {
     if (!barRef.current) return
-    await exportNodeAsPNG(barRef.current, {
+    await ExportNodeAsPNG(barRef.current, {
       width: 1920, height: 1080, background: '#ffffff', pixelRatio: 2,
       filename: `${base}-action-dist-${ts}.png`
     })
@@ -173,15 +175,6 @@ export function Results({
     manual: "#111827",
   }
 
-  // cfg for ManualPlay (always computed, safe defaults)
-  const manualCfg = useMemo(() => ({
-    env: envType,
-    n_actions: envInfo.n_actions ?? 0,
-    iterations,
-    algorithms: [],
-    seed: undefined,
-  }), [envType, envInfo.n_actions, iterations])
-
   const handleSync = useCallback((hist: ManualEv[]) => setManual(hist), []);
   const handleEvent = useCallback((ev: ManualEv) => {
     setManual(prev => {
@@ -206,26 +199,16 @@ export function Results({
 
   // ---------- RENDER ----------
   return playCtx && (
-    <section className="card card-pad w-4/5" id="results">
-      <div className="grid gap-8 items-start md:grid-cols-2">
-        {/* header: spans both columns */}
-        {/* <div className="md:col-span-2">
-          <div className="text-lg font-semibold">
-            {(hasPlotted || keys.includes('manual')) ? 'Pizzeria Ergebnisse 🍕' : 'Manual Play Session 🍕'}
-          </div>
-          <div className="text-sm text-zinc-600">
-            Kundenmodell: <span className="font-medium">{isBernoulli ? 'Bernoulli' : 'Gaussian'}</span> •{' '}
-            Toppings: <span className="font-medium">{envInfo.n_actions ?? 0}</span>
-          </div>
-        </div> */}
-
+    <section className="card card-pad w-4/5 scroll-mt-[72px]" id="results">
+      <div className="flex gap-8 items-start md:grid-cols-2">
         {/* left column: manual tester */}
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1">
           <ManualPlay
             playCtx={playCtx}
             mode="backend"
             onSync={handleSync}
             onEvent={handleEvent}
+            resetPlay={resetPlay}
           />
         </div>
         {loading && <div className="text-zinc-600">Running…</div>}
@@ -235,7 +218,7 @@ export function Results({
 
         {/* right column: results */}
         {data ? (
-          <div className="space-y-8">
+          <div className="space-y-8 flex-1 ">
             {/* LINE CHART*/}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -323,7 +306,11 @@ export function Results({
               </div>
             </div>
           </div>
-        ) : <button className="btn" onClick={onPlot} disabled={loading}>Plot</button>}
+        ) :
+          <div className="flex-1 h-[50rem] flex justify-center items-center" >
+            <button className="btn" onClick={onPlot} disabled={loading}>Plot Results</button>
+          </div>
+        }
       </div>
     </section>
   )

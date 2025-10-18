@@ -2,7 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EnvInfo, PlayCtx } from "@/types";
 import { playLog, playReset, playStep } from "@/api";
+import { scrollTo } from "@/utils/nav";
 
+/** list of 100 topping base names used to generate N labels */
 export const BASE_TOPPINGS = [
   "Ananas", "Salami", "Schinken", "Champignons", "Paprika", "Zwiebeln", "Oliven", "Thunfisch", "Peperoni", "Spinat",
   "Mais", "Artischocken", "Brokkoli", "Rucola", "Feta", "Mozzarella", "Parmesan", "Gorgonzola", "Cheddar", "Gouda",
@@ -20,7 +22,7 @@ export const BASE_TOPPINGS = [
 
 export type ToppingBase = typeof BASE_TOPPINGS[number];
 
-/* local fallback RNG */
+/** Tiny fast PRNG */
 function mulberry32(a: number) {
   return function () {
     let t = (a += 0x6d2b79f5);
@@ -30,6 +32,11 @@ function mulberry32(a: number) {
   };
 }
 
+/**
+ * Build N topping labels by cycling BASE_TOPPINGS and suffixing duplicates 
+ * e.g. ["Ananas","Salami","Ananas 2","Salami 2",…]
+ * Comment: limited toppings to 100 to avoid duplicates
+ */
 export function buildToppings(total: number, base = BASE_TOPPINGS): string[] {
   const result: string[] = [];
   const counts = new Map<string, number>();
@@ -54,8 +61,9 @@ type ManualPlayProps = {
   playCtx: PlayCtx
   mode?: "auto" | "backend" | "local";
   onClose?: () => void;
-  onEvent?: (ev: { t: number; action: number; reward: number; accepted?: boolean }) => void; // ★
-  onSync?: (hist: Array<{ t: number; action: number; reward: number; accepted?: boolean }>) => void; // ★
+  onEvent?: (ev: { t: number; action: number; reward: number; accepted?: boolean }) => void;
+  onSync?: (hist: Array<{ t: number; action: number; reward: number; accepted?: boolean }>) => void;
+  resetPlay: () => void
 }
 
 export default function ManualPlay({
@@ -64,13 +72,17 @@ export default function ManualPlay({
   onClose,
   onEvent,
   onSync,
+  resetPlay
 }: ManualPlayProps) {
+
+  // ---- derive stable inputs from playCtx
   const sessionId = playCtx.data.session_id
   const nActions = playCtx.n_actions
   const env = playCtx.data.env
   const seed = (playCtx.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0;
   const useBackend = (mode === "backend") || (mode === "auto" && !!sessionId);
 
+  // ---- local state
   const [backendEnv, setBackendEnv] = useState<EnvInfo | null>(null);
   const [iterations, setIterations] = useState<number>(playCtx.data.iterations ?? 1000);
   const [t, setT] = useState<number>(1);
@@ -82,7 +94,7 @@ export default function ManualPlay({
   useEffect(() => { onSyncRef.current = onSync }, [onSync]);
 
 
-  // Load env + history from server when session starts
+  // ---- initial sync from server
   useEffect(() => {
     let cancel = false;
     async function init() {
@@ -90,7 +102,7 @@ export default function ManualPlay({
       try {
         const info = await playLog(sessionId);
         if (cancel) return;
-
+        // normalize env payload to a typed object we can render easily
         const env = info.env.type === "bernoulli"
           ? { type: "bernoulli" as const, n_actions: info.env.n_actions, p: info.env.p ?? [] }
           : { type: "gaussian" as const, n_actions: info.env.n_actions, means: info.env.means ?? [], stds: info.env.stds ?? [] };
@@ -144,7 +156,6 @@ export default function ManualPlay({
         setLast(item);
         setT(res.t + 1);
 
-        // ★ event for charts (chronological single append)
         onEvent?.({ t: res.t, action: a, reward: res.reward, accepted: res.accepted });
       } catch (e) {
         console.error("playStep failed:", e);
@@ -198,7 +209,8 @@ export default function ManualPlay({
   }
 
   function resetHard() {
-
+    resetPlay()
+    scrollTo("selection")
   }
 
   const envKind: "bernoulli" | "gaussian" =
@@ -231,6 +243,8 @@ export default function ManualPlay({
             show true environment
           </label>
         </div>
+
+        { /* Format the log based on what model is selected */ }
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 ">
           {Array.from({ length: N }).map((_, i) => {
             const truth =

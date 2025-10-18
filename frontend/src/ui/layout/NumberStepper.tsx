@@ -11,8 +11,8 @@ type Props = {
     max?: number;
     step?: number;
     disabled?: boolean;
-    className?: string; // for outer wrapper
-    holdSpeedMs?: number; // press-and-hold interval (e.g., 80). Omit to disable.
+    className?: string;
+    holdSpeedMs?: number; // press-and-hold interval (e.g., 80).
     required?: boolean;
 };
 
