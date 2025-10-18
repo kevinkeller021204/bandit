@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Controls } from './Controls'
 import { Results } from './Results'
 import type { PlayCtx, RunResponse } from '@/types'
-import Header from './Header'
+import Header from './layout/Header'
 
 export default function App() {
   const [loading, setLoading] = useState(false)

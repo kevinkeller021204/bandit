@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { EnvType, UploadedAlgorithm, PlayCtx, RunConfig } from '@/types'
 import { listAlgorithms, playStart } from '@/api'
-import CustomAlgoUpload from './CustomAlgoUpload'
-import { NumberStepper } from './NumberStepper'
-import { SegmentedToggle } from './SegmentedToggle'
-import { useToast } from './ToastProvider'
+import CustomAlgoUpload from './layout/CustomAlgoUpload'
+import { NumberStepper } from './layout/NumberStepper'
+import { SegmentedToggle } from './layout/SegmentedToggle'
+import { useToast } from './layout/ToastProvider'
 import { formatError } from '@/utils/formatError'
 
 const ALL_ALGOS = [

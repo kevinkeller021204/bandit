@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayCtx, RunResponse } from '@/types'
 import ManualPlay from './ManualPlay'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { ExportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './ExportChart'
+import { ExportNodeAsPNG, exportNodeAsSVG, copyNodeAsPNGToClipboard } from './layout/ExportChart'
 import { scrollTo } from '@/utils/nav'
 import { plotFromSession } from '@/api'
 
