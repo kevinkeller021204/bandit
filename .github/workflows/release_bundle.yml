@@ -196,6 +196,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout default branch
         uses: actions/checkout@v4
@@ -248,17 +249,16 @@ jobs:
               f.write(s)
           PY
 
-      - name: Commit README if changed
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if ! git diff --quiet README.md; then
-            git add README.md
-            git commit -m "docs(README): update latest installer links [skip ci]" || true
-            git push origin HEAD:refs/heads/$DEFAULT_BRANCH
-          else
-            echo "README unchanged."
-          fi
+      - name: Create PR for README update
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ci/readme-auto-update          # Name des Auto-Branches
+          base: ${{ github.event.repository.default_branch }}  # PR-Ziel (meist main)
+          title: "docs(README): update latest installer links"
+          commit-message: "docs(README): update latest installer links [skip ci]"
+          body: "Automated README update from release workflow."
+          add-paths: README.md                   # nur README committen
+          labels: documentation
+          draft: false
+          delete-branch: true
