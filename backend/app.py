@@ -313,6 +313,10 @@ def _gc(now: float | None = None):
 IS_DEV = os.environ.get("VITE_DEV", "0") == "0"
 VITE_URL = os.environ.get("VITE_URL", "http://localhost:5173")
 
+IS_DEV = os.environ.get("VITE_DEV", "1") == "0"
+VITE_URL = os.environ.get("VITE_URL", "http://localhost:5173")
+
+
 app = cors(Quart(__name__), allow_origin="*", allow_headers="*", allow_methods=["GET", "POST", "OPTIONS"])
 app.config["PROVIDE_AUTOMATIC_OPTIONS"] = True
 
