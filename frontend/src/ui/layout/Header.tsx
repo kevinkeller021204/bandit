@@ -1,6 +1,7 @@
-// src/layout/Header.tsx
-import { useEffect, useState } from "react";
+// src/Header.tsx
+import { useEffect, useState, useRef } from "react";
 import Scrollspy from "react-scrollspy";
+import { useTranslation } from "react-i18next";
 
 /**
 * Header
@@ -30,9 +31,48 @@ export default function Header({
     onTranslate,
 }: HeaderProps) {
     // Whether the window has scrolled enough to switch header style
+    const { t, i18n } = useTranslation();
     const [scrolled, setScrolled] = useState(false);
     // Tracks which section is active (from Scrollspy)
     const [active, setActive] = useState<string>(selectionId);
+    const [openLang, setOpenLang] = useState(false);
+    const langBtnRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
+
+    // Close language menu when clicking outside or pressing ESC
+    useEffect(() => {
+        if (!openLang) return;
+        const onDocClick = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(target) &&
+                langBtnRef.current &&
+                !langBtnRef.current.contains(target)
+            ) {
+                setOpenLang(false);
+            }
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setOpenLang(false);
+        };
+        document.addEventListener("mousedown", onDocClick);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onDocClick);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [openLang]);
+
+    const setLang = (lng: "en" | "de") => {
+        i18n.changeLanguage(lng);
+        localStorage.setItem("lang", lng);
+        setOpenLang(false);
+        // still call external handler if someone passed one
+        onTranslate?.();
+    };
+
+    const currentLang = (i18n.resolvedLanguage || i18n.language || "en").slice(0, 2).toLowerCase();
 
     // Listen for scroll to toggle condensed background/shadow
     useEffect(() => {
@@ -66,7 +106,7 @@ export default function Header({
                         SliceWise <span className="ml-0.5">🍕</span>
                         <span className="sr-only"> — </span>
                         <span className="hidden sm:inline text-zinc-500 font-normal">
-                            &nbsp; - Bandit-Labor
+                            &nbsp; - {t("tagline", { defaultValue: "Bandit Lab" })}
                         </span>
                     </div>
                 </div>
@@ -91,7 +131,7 @@ export default function Header({
                                 className={[baseTab, active === selectionId ? activeTab : inactiveTab].join(" ")}
                                 aria-current={active === selectionId ? "page" : undefined}
                             >
-                                Selection
+                                {t("nav.selection")}
                             </a>
                         </li>
                         <li className="list-none">
@@ -100,7 +140,7 @@ export default function Header({
                                 className={[baseTab, active === resultsId ? activeTab : inactiveTab].join(" ")}
                                 aria-current={active === resultsId ? "page" : undefined}
                             >
-                                Results
+                                {t("nav.results")}
                             </a>
                         </li>
                     </Scrollspy>
@@ -115,7 +155,7 @@ export default function Header({
                             ].join(" ")}
                             aria-current={active === selectionId ? "page" : undefined}
                         >
-                            Sel.
+                            {t("nav.selection")}
                         </a>
                         <a
                             href={`#${resultsId}`}
@@ -125,30 +165,65 @@ export default function Header({
                             ].join(" ")}
                             aria-current={active === resultsId ? "page" : undefined}
                         >
-                            Res.
+                            {t("nav.results")}
                         </a>
                     </div>
 
                     {/* Translate button */}
-                    <button
-                        type="button"
-                        title="Change language"
-                        aria-label="Change language"
-                        onClick={onTranslate}
-                        className="ml-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 hover:bg-zinc-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60"
-                    >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            className="h-4 w-4"
-                            strokeWidth={1.8}
-                            aria-hidden="true"
+                    <div className="relative">
+                        <button
+                            ref={langBtnRef}
+                            type="button"
+                            title={t("nav.language")}
+                            aria-label={t("nav.language")}
+                            aria-haspopup="menu"
+                            aria-expanded={openLang}
+                            onClick={() => setOpenLang(o => !o)}
+                            className="ml-1 inline-flex h-9 items-center gap-1 rounded-full border border-zinc-300 px-3 hover:bg-zinc-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60"
                         >
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" />
-                        </svg>
-                    </button>
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                className="h-4 w-4"
+                                strokeWidth={1.8}
+                                aria-hidden="true"
+                            >
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" />
+                            </svg>
+                            <span className="text-sm font-medium uppercase">{currentLang}</span>
+                            <svg className="h-3.5 w-3.5 opacity-70" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.215l3.71-3.985a.75.75 0 111.08 1.04l-4.24 4.55a.75.75 0 01-1.08 0l-4.24-4.55a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+
+                        {openLang && (
+                            <div
+                                ref={menuRef}
+                                role="menu"
+                                aria-label={t("nav.language")}
+                                className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg"
+                            >
+                                <button
+                                    role="menuitem"
+                                    className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-zinc-50 ${currentLang === "en" ? "font-semibold" : ""}`}
+                                    onClick={() => setLang("en")}
+                                >
+                                    English
+                                    {currentLang === "en" && <span aria-hidden>✓</span>}
+                                </button>
+                                <button
+                                    role="menuitem"
+                                    className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-zinc-50 ${currentLang === "de" ? "font-semibold" : ""}`}
+                                    onClick={() => setLang("de")}
+                                >
+                                    Deutsch
+                                    {currentLang === "de" && <span aria-hidden>✓</span>}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </nav>
             </div>
         </header>

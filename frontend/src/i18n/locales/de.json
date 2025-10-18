@@ -1,0 +1,103 @@
+{
+  "nav": {
+    "selection": "Auswahl",
+    "results": "Ergebnisse",
+    "language": "Sprache",
+    "brand": "SliceWise",
+    "tagline": "Bandit-Labor"
+  },
+  "controls": {
+    "title": "Pizzeria Setup",
+    "bandit": "Bandit",
+    "toppings": "Toppings",
+    "customers": "Kunden",
+    "seed": "Zufalls-Seed",
+    "algorithms": "Algorithmen",
+    "play": "Spielen",
+    "plot": "Plot",
+    "uploadAlgorithm": "Algorithmus Hochladen",
+    "uploadAlgorithmBtn": "Hochladen",
+    "uploading": "Wird hochgeladen…",
+    "name": "Name",
+    "entryFunction": "Einstiegsfunktion",
+    "sha256": "SHA-256",
+    "uploadFileTypeError": "Bitte wähle eine .py- oder .zip-Datei.",
+    "uploadFailed": "Upload fehlgeschlagen",
+    "infoBtn": "Erklärung anzeigen",
+    "pizzaInfoHtml": "Wähle, wie viele <strong>Topping-Optionen</strong> du anbietest und welche <strong>Empfehlungsstrategien</strong> du testen willst.",
+    "uploadInfoHtml": "Bitte nutze den Beispielalgorithmus auf GitHub im Ordner <strong>„Example Algorithm“</strong>.",
+    "algoNames": {
+      "greedy": "Greedy (min)",
+      "epsilon_greedy": "Epsilon-Greedy (min)",
+      "ucb1": "UCB1 (adv)",
+      "thompson": "Thompson Sampling (adv)"
+    },
+    "algoInfo": {
+      "greedy": "<h3 class=\"font-semibold mb-1\">Greedy</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Wählt immer die aktuell bestbekannte Aktion (höchster geschätzter Wert).</li><li><strong>Pro:</strong> nutzt bekannte Informationen vollständig aus.</li><li><strong>Contra:</strong> keine Exploration &rarr; kann in lokalem Optimum stecken bleiben.</li><li>Schätzungsupdate: inkrementelles Mittel der beobachteten Belohnungen.</li></ul>",
+      "epsilon_greedy": "<h3 class=\"font-semibold mb-1\">Epsilon-Greedy</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Mit Wahrscheinlichkeit <code>ε</code> zufällige Exploration; sonst gieriges Ausnutzen.</li><li><strong>Parameter:</strong> <code>ε</code> in [0,1] (z. B. 0,1).</li><li><strong>Abwägung:</strong> Exploration vs. Exploitation.</li><li>Gute, einfache und robuste Standardeinstellung.</li></ul>",
+      "ucb1": "<h3 class=\"font-semibold mb-1\">UCB1 (Upper Confidence Bound)</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Wählt Aktion mit <em>Schätzung + Unsicherheitsbonus</em>.</li><li>Intuition: bevorzugt gute Mittelwerte <em>und</em> unterabgetastete Aktionen.</li><li>Formel (vereinfacht): <code>mean_i + sqrt(2 * ln(t) / n_i)</code></li><li>Sehr effektiv bei stationären Bandits.</li></ul>",
+      "thompson": "<h3 class=\"font-semibold mb-1\">Thompson Sampling</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Bayes’sch: Ziehen aus Posterior-Verteilungen (z. B. Beta für Bernoulli).</li><li>Natürliche Balance zwischen Exploration &amp; Exploitation.</li><li>Oft schnelle Konvergenz und starke praktische Performance.</li></ul>"
+    }
+  },
+  "manual": {
+    "title": "Topping-Tester",
+    "live": "Livesitzung vom Server.",
+    "local": "Lokaler Demo-Modus.",
+    "toppings": "Toppings",
+    "showTruth": "wahre Umgebung anzeigen",
+    "lastChoice": "Letzte Wahl",
+    "outcome": "Ergebnis",
+    "reward": "Reward",
+    "accepted": "Akzeptiert ✅",
+    "skipped": "Übersprungen ❌",
+    "resetInput": "Eingaben zurücksetzen",
+    "resetSession": "Sitzung zurücksetzen",
+    "customersShort": "Kunde {{current}} / {{total}}",
+    "acceptedRaw": "akzeptiert",
+    "skippedRaw": "übersprungen",
+    "rewardEq": "reward={{v}}",
+    "pApprox": "p≈{{v}}",
+    "muApprox": "μ≈{{v}}",
+    "noEvents": "Noch keine Ereignisse.",
+    "eventLog": "Ereignis-Log"
+  },
+  "results": {
+    "acceptance": "Akzeptanzrate über Zeit",
+    "avgOverTime": "Durchschnittlicher Reward über Zeit",
+    "offered": "Toppings angeboten (Häufigkeit)",
+    "perfPerStrategy": "Leistung je Strategie",
+    "youManual": "Du (manuell)",
+    "png": "PNG",
+    "svg": "SVG",
+    "copy": "Kopieren",
+    "customerN": "Kunde {{n}}",
+    "toppingN": "Topping {{n}}",
+    "finalAccept": "Finale Akzeptanzrate",
+    "finalAvg": "Finaler durchschnittl. Reward"
+  },
+  "errors": {
+    "invalidPayload": "Ungültige Eingabe. Bitte überprüfe die Felder.",
+    "selectAtLeastOne": "Bitte wähle mindestens eine Option.",
+    "integer": "Bitte eine ganze Zahl eingeben.",
+    "ge": "Muss ≥ {{limit}} sein.",
+    "le": "Muss ≤ {{limit}} sein.",
+    "server": "Serverfehler. Bitte später erneut versuchen.",
+    "notFound": "Nicht gefunden. Bitte Seite aktualisieren.",
+    "requestFailed": "Anfrage fehlgeschlagen ({{status}})."
+  },
+  "fields": {
+    "env": "Bandit",
+    "n_actions": "Toppings",
+    "iterations": "Kunden",
+    "algorithms": "Algorithmen",
+    "custom_algorithms": "Eigene Algorithmen",
+    "seed": "Zufalls-Seed",
+    "session_id": "Session"
+  },
+  "a11y": {
+    "decrease": "Verringern",
+    "increase": "Erhöhen",
+    "dismiss": "Schließen",
+    "required": "Pflichtfeld"
+  }
+}

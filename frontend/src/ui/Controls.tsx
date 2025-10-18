@@ -6,6 +6,7 @@ import { NumberStepper } from './layout/NumberStepper'
 import { SegmentedToggle } from './layout/SegmentedToggle'
 import { useToast } from './layout/ToastProvider'
 import { formatError } from '@/utils/formatError'
+import { useTranslation } from 'react-i18next'
 
 /**
 * Controls
@@ -31,55 +32,17 @@ import { formatError } from '@/utils/formatError'
 
 // Built‑in algorithms visible in the UI
 const ALL_ALGOS = [
-  { key: 'greedy', label: 'Greedy (min)' },
-  { key: 'epsilon_greedy', label: 'Epsilon-Greedy (min)' },
-  { key: 'ucb1', label: 'UCB1 (adv)' },
-  { key: 'thompson', label: 'Thompson Sampling (adv)' },
+  { key: 'greedy' as const },
+  { key: 'epsilon_greedy' as const },
+  { key: 'ucb1' as const },
+  { key: 'thompson' as const },
 ]
-
-// Small HTML snippets explaining each algorithm rendered into collapsible panels
-const ALGO_INFO_HTML: Record<string, string> = {
-  greedy: `
-    <h3 class="font-semibold mb-1">Greedy</h3>
-    <ul class="list-disc pl-5 space-y-1">
-      <li>Wählt immer die aktuell beste bekannte Aktion (höchster geschätzter Wert).</li>
-      <li><strong>Vorteil:</strong> nutzt vorhandenes Wissen maximal aus.</li>
-      <li><strong>Nachteil:</strong> keine Exploration &rarr; kann in lokalem Optimum stecken bleiben.</li>
-      <li>Update der Schätzung: inkrementelles Mittel der beobachteten Rewards.</li>
-    </ul>
-  `,
-  epsilon_greedy: `
-    <h3 class="font-semibold mb-1">Epsilon-Greedy</h3>
-    <ul class="list-disc pl-5 space-y-1">
-      <li>Mit Wahrscheinlichkeit <code>ε</code> wird zufällig exploriert, sonst greedy ausgebeutet.</li>
-      <li><strong>Parameter:</strong> <code>ε</code> in [0,1] (z. B. 0.1).</li>
-      <li><strong>Trade-off:</strong> Exploration vs. Exploitation.</li>
-      <li>Geeignet als einfacher, robuster Standard.</li>
-    </ul>
-  `,
-  ucb1: `
-    <h3 class="font-semibold mb-1">UCB1 (Upper Confidence Bound)</h3>
-    <ul class="list-disc pl-5 space-y-1">
-      <li>Wählt Aktion mit <em>Schätzwert + Unsicherheitsbonus</em>.</li>
-      <li>Intuition: bevorzugt gute Mittelwerte <em>und</em> wenig beprobte Aktionen.</li>
-      <li>Formel (vereinfacht): <code>mean_i + sqrt(2 * ln(t) / n_i)</code></li>
-      <li>Sehr wirksam bei stationären Banditen.</li>
-    </ul>
-  `,
-  thompson: `
-    <h3 class="font-semibold mb-1">Thompson Sampling</h3>
-    <ul class="list-disc pl-5 space-y-1">
-      <li>Bayesianisch: zieht zufällig aus Posterior-Verteilungen (z. B. Beta bei Bernoulli).</li>
-      <li>Natürliche Balance zwischen Exploration &amp; Exploitation.</li>
-      <li>Oft sehr schnelle Konvergenz und starke praktische Performance.</li>
-    </ul>
-  `,
-};
 
 export function Controls({
   onPlayStarted,
 }: { onPlayStarted?: (playCtx: PlayCtx) => void }) {
   // --- Core configuration state ---
+  const { t } = useTranslation()
   const [env, setEnv] = useState<EnvType>('bernoulli') // type of bandit environment
   const [nActions, setNActions] = useState(10)         // number of arms ("toppings")
   const [iterations, setIterations] = useState(50)     // number of steps ("customers")
@@ -119,7 +82,6 @@ export function Controls({
   */
   function onUploadedAlgo(a: UploadedAlgorithm) {
     setUploaded(prev => [a, ...prev.filter(x => x.id !== a.id)])
-    // instantly show & select the new checkbox
     setSelectedCustom(prev => prev.includes(a.id) ? prev : [a.id, ...prev])
   }
 
@@ -156,37 +118,36 @@ export function Controls({
       })
     }
     catch (e: any) {
-      error(formatError(e));
+      error(formatError(e))
     }
   }
 
   /** Open/close an info panel by key (acts like an accordion: only one open) */
   function toggleInfo(key: string) {
-    setOpenInfo(prev => (prev === key ? null : key));
+    setOpenInfo(prev => (prev === key ? null : key))
   }
 
   return (
     <div className="space-y-5 w-1xl">
       {/* Header with scenario help */}
       <div className="flex flex-wrap items-center">
-        <div className="text-lg font-semibold p-2">Pizzeria Setup</div>
+        <div className="text-lg font-semibold p-2">{t('controls.title')}</div>
         <button
           type="button"
           className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
-          title="Erklärung anzeigen"
-          onClick={() => toggleInfo("pizza-topping-bandit")}
-          aria-expanded={openInfo === "pizza-topping-bandit"}
-          aria-controls={`algo-info-${"pizza-topping-bandit"}`}
+          title={t('controls.infoBtn')}
+          onClick={() => toggleInfo('pizza-topping-bandit')}
+          aria-expanded={openInfo === 'pizza-topping-bandit'}
+          aria-controls="algo-info-pizza"
         >
           ?
         </button>
-        {openInfo === "pizza-topping-bandit" && (
+        {openInfo === 'pizza-topping-bandit' && (
           <div
-            id={`algo-info-${"pizza-topping-bandit"}`}
+            id="algo-info-pizza"
             className="mt-2 rounded bg-zinc-50 p-3 text-sm basis-full"
-            dangerouslySetInnerHTML={{
-              __html: `<p class="text-sm text-zinc-600">Choose how many <strong>topping options</strong> you offer and which <strong>recommendation strategies</strong> to try.</p>`,
-            }}
+            // NOTE: escapeValue must be false in i18next init
+            dangerouslySetInnerHTML={{ __html: t('controls.pizzaInfoHtml') }}
           />
         )}
       </div>
@@ -194,19 +155,19 @@ export function Controls({
       {/* Core numeric/environment controls */}
       <div className="grid grid-cols-2 gap-x-[4rem] gap-y-4 pb-5">
         <SegmentedToggle<EnvType>
-          label="Bandit"
+          label={t('controls.bandit')}
           value={env}
           onChange={setEnv}
           options={[
-            { label: "Bernoulli", value: "bernoulli" },
-            { label: "Gaussian", value: "gaussian" },
+            { label: 'Bernoulli', value: 'bernoulli' },
+            { label: 'Gaussian', value: 'gaussian' },
           ]}
           size="lg"
           className="w-full"
         />
         <div>
           <NumberStepper
-            label="Toppings"
+            label={t('controls.toppings')}
             id="toppings"
             value={nActions}
             onChange={setNActions}
@@ -217,7 +178,7 @@ export function Controls({
         </div>
         <div>
           <NumberStepper
-            label="Customers"
+            label={t('controls.customers')}
             id="customers"
             value={iterations}
             onChange={setIterations}
@@ -228,8 +189,8 @@ export function Controls({
         </div>
         <div>
           <NumberStepper
-            label="Random Seed"
-            id="customers"
+            label={t('controls.seed')}
+            id="seed"
             value={seed}
             onChange={setSeed}
             min={0}
@@ -243,7 +204,7 @@ export function Controls({
       {/* Algorithm selection: built‑ins plus (if any) uploaded customs */}
       <div>
         <div className="label mb-2">
-          Algorithmen{" "}
+          {t('controls.algorithms')}{' '}
           <span className="text-red-600" aria-hidden="true">*</span>
         </div>
         <div className="grid grid-cols-2 gap-2 items-start pb-5">
@@ -257,13 +218,12 @@ export function Controls({
                     checked={algos.includes(a.key)}
                     onChange={() => toggleAlgo(a.key)}
                   />
-                  <span>{a.label}</span>
+                  <span>{t(`controls.algoNames.${a.key}`)}</span>
                 </label>
-
                 <button
                   type="button"
                   className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
-                  title="Erklärung anzeigen"
+                  title={t('controls.infoBtn')}
                   onClick={() => toggleInfo(a.key)}
                   aria-expanded={openInfo === a.key}
                   aria-controls={`algo-info-${a.key}`}
@@ -278,7 +238,7 @@ export function Controls({
                   id={`algo-info-${a.key}`}
                   className="mt-2 rounded bg-zinc-50 p-3 text-sm"
                   dangerouslySetInnerHTML={{
-                    __html: ALGO_INFO_HTML[a.key] || '<em>Keine Beschreibung verfügbar.</em>',
+                    __html: t(`controls.algoInfo.${a.key}`, '<em>—</em>'),
                   }}
                 />
               )}
@@ -306,11 +266,11 @@ export function Controls({
       {/* Upload area with inline help */}
       <div className="mt-2 pb-5">
         <div className="flex flex-wrap items-center">
-          <div className="text-lg font-semibold p-2">Upload algorithm</div>
+          <div className="text-lg font-semibold p-2">{t('controls.uploadAlgorithm')}</div>
           <button
             type="button"
             className="h-6 w-6 rounded-full border border-zinc-300 text-xs leading-6 text-zinc-600 hover:bg-zinc-100"
-            title="Erklärung anzeigen"
+            title={t('controls.infoBtn')}
             onClick={() => toggleInfo('upload')}
             aria-expanded={openInfo === 'upload'}
             aria-controls="algo-info-upload"
@@ -321,12 +281,7 @@ export function Controls({
             <div
               id="algo-info-upload"
               className="mt-2 rounded bg-zinc-50 p-3 text-sm basis-full"
-              dangerouslySetInnerHTML={{
-                __html: `<p class="text-sm text-zinc-600">
-                  Bitte orientiere dich beim Implementieren an unserem Beispielalgorithmus auf GitHub,
-                  im Ordner <strong>„Example Algorithm“</strong>.
-                </p>`,
-              }}
+              dangerouslySetInnerHTML={{ __html: t('controls.uploadInfoHtml') }}
             />
           )}
         </div>
@@ -338,7 +293,7 @@ export function Controls({
       {/* Run section */}
       <div className="space-y-3">
         <div className="flex gap-2 justify-center">
-          <button className="btn-lg" onClick={onPlay}>Kunden bedienen</button>
+          <button className="btn-lg" onClick={onPlay}>{t('controls.play')}</button>
         </div>
       </div>
     </div>

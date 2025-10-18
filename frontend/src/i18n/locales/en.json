@@ -1,0 +1,103 @@
+{
+  "nav": {
+    "selection": "Selection",
+    "results": "Results",
+    "language": "Language",
+    "brand": "SliceWise",
+    "tagline": "Bandit Lab"
+  },
+  "controls": {
+    "title": "Pizzeria Setup",
+    "bandit": "Bandit",
+    "toppings": "Toppings",
+    "customers": "Customers",
+    "seed": "Random Seed",
+    "algorithms": "Algorithms",
+    "play": "Play",
+    "plot": "Plot",
+    "uploadAlgorithm": "Upload Algorithm",
+    "uploadAlgorithmBtn": "Upload",
+    "uploading": "Uploading…",
+    "name": "Name",
+    "entryFunction": "Entry function",
+    "sha256": "SHA-256",
+    "uploadFileTypeError": "Please select a .py or .zip file.",
+    "uploadFailed": "Upload failed",
+    "infoBtn": "Show explanation",
+    "pizzaInfoHtml": "Choose how many <strong>topping options</strong> you offer and which <strong>recommendation strategies</strong> to try.",
+    "uploadInfoHtml": "Please use the sample algorithm on GitHub in the <strong>“Example Algorithm”</strong> folder.",
+    "algoNames": {
+      "greedy": "Greedy (min)",
+      "epsilon_greedy": "Epsilon-Greedy (min)",
+      "ucb1": "UCB1 (adv)",
+      "thompson": "Thompson Sampling (adv)"
+    },
+    "algoInfo": {
+      "greedy": "<h3 class=\"font-semibold mb-1\">Greedy</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Always picks the currently best-known action (highest estimated value).</li><li><strong>Pro:</strong> fully exploits known information.</li><li><strong>Con:</strong> no exploration &rarr; can get stuck in a local optimum.</li><li>Estimate update: incremental mean of observed rewards.</li></ul>",
+      "epsilon_greedy": "<h3 class=\"font-semibold mb-1\">Epsilon-Greedy</h3><ul class=\"list-disc pl-5 space-y-1\"><li>With probability <code>ε</code> explore randomly; otherwise exploit greedily.</li><li><strong>Parameter:</strong> <code>ε</code> in [0,1] (e.g. 0.1).</li><li><strong>Trade-off:</strong> exploration vs. exploitation.</li><li>Good simple, robust default.</li></ul>",
+      "ucb1": "<h3 class=\"font-semibold mb-1\">UCB1 (Upper Confidence Bound)</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Pick action with <em>estimate + uncertainty bonus</em>.</li><li>Intuition: favors good means <em>and</em> under-sampled actions.</li><li>Formula (simplified): <code>mean_i + sqrt(2 * ln(t) / n_i)</code></li><li>Very effective on stationary bandits.</li></ul>",
+      "thompson": "<h3 class=\"font-semibold mb-1\">Thompson Sampling</h3><ul class=\"list-disc pl-5 space-y-1\"><li>Bayesian: sample from posterior distributions (e.g., Beta for Bernoulli).</li><li>Natural balance between exploration &amp; exploitation.</li><li>Often fast convergence and strong practical performance.</li></ul>"
+    }
+  },
+  "manual": {
+    "title": "Manual Topping Tester",
+    "live": "Live session from server.",
+    "local": "Local demo mode.",
+    "toppings": "Toppings",
+    "showTruth": "show true environment",
+    "lastChoice": "Last choice",
+    "outcome": "Outcome",
+    "reward": "Reward",
+    "accepted": "Accepted ✅",
+    "skipped": "Skipped ❌",
+    "resetInput": "Reset Input",
+    "resetSession": "Reset Session",
+    "customersShort": "Customer {{current}} / {{total}}",
+    "acceptedRaw": "accepted",
+    "skippedRaw": "skipped",
+    "rewardEq": "reward={{v}}",
+    "pApprox": "p≈{{v}}",
+    "muApprox": "μ≈{{v}}",
+    "noEvents": "No events yet.",
+    "eventLog": "Event log"
+  },
+  "results": {
+    "acceptance": "Acceptance rate over time",
+    "avgOverTime": "Average reward over time",
+    "offered": "Toppings offered (count)",
+    "perfPerStrategy": "Performance by strategy",
+    "youManual": "You (manual)",
+    "png": "PNG",
+    "svg": "SVG",
+    "copy": "Copy",
+    "customerN": "Customer {{n}}",
+    "toppingN": "Topping {{n}}",
+    "finalAccept": "Final acceptance rate",
+    "finalAvg": "Final average reward"
+  },
+  "errors": {
+    "invalidPayload": "Invalid input. Please check the fields.",
+    "selectAtLeastOne": "Please select at least one option.",
+    "integer": "Enter a whole number.",
+    "ge": "Must be ≥ {{limit}}.",
+    "le": "Must be ≤ {{limit}}.",
+    "server": "Server error. Please try again in a moment.",
+    "notFound": "Not found. Please refresh and try again.",
+    "requestFailed": "Request failed ({{status}})."
+  },
+  "fields": {
+    "env": "Bandit",
+    "n_actions": "Toppings",
+    "iterations": "Customers",
+    "algorithms": "Algorithms",
+    "custom_algorithms": "Custom algorithms",
+    "seed": "Random seed",
+    "session_id": "Session"
+  },
+  "a11y": {
+    "decrease": "Decrease",
+    "increase": "Increase",
+    "dismiss": "Dismiss",
+    "required": "Required"
+  }
+}

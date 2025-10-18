@@ -3,11 +3,15 @@ import ReactDOM from 'react-dom/client'
 import './index.css'
 import App from './ui/App'
 import { ToastProvider } from './ui/layout/ToastProvider'
+import i18n from './i18n';
+import { I18nextProvider } from 'react-i18next';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ToastProvider>
-      <App />
-    </ToastProvider>
+    <I18nextProvider i18n={i18n}>
+      <ToastProvider>
+        <App />
+      </ToastProvider>
+    </I18nextProvider>
   </React.StrictMode>
 )
