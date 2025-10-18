@@ -2,18 +2,21 @@
 import { useRef, useState } from 'react';
 import { uploadAlgorithm } from '@/api';
 import type { UploadedAlgorithm } from '@/types';
+import { useTranslation } from 'react-i18next';
 
 export default function CustomAlgoUpload({
   onUploaded,
 }: {
   onUploaded: (algo: UploadedAlgorithm) => void;
 }) {
-  const [file, setFile]   = useState<File | null>(null);
-  const [name, setName]   = useState('');
+  const { t } = useTranslation();
+
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState('');
   const [entry, setEntry] = useState('run');
-  const [hash, setHash]   = useState('');
-  const [busy, setBusy]   = useState(false);
-  const [err, setErr]     = useState<string>('');
+  const [hash, setHash] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>('');
 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -26,7 +29,7 @@ export default function CustomAlgoUpload({
   async function onPick(f?: File) {
     if (!f) return;
     if (!/\.(py|zip)$/i.test(f.name)) {
-      setErr('Please select a .py or .zip file.');
+      setErr(t('controls.uploadFileTypeError'));
       return;
     }
     setErr('');
@@ -51,7 +54,7 @@ export default function CustomAlgoUpload({
       setFile(null); setName(''); setEntry('run'); setHash('');
       if (inputRef.current) inputRef.current.value = '';
     } catch (e: any) {
-      setErr(e?.message ?? 'Upload failed');
+      setErr(e?.message ?? t('controls.uploadFailed'));
     } finally {
       setBusy(false);
     }
@@ -65,34 +68,37 @@ export default function CustomAlgoUpload({
 
   return (
     <div className="space-y-3">
-      
       {/* Hidden native input */}
       <input
         ref={inputRef}
         type="file"
         accept=".py,.zip"
         onChange={e => onPick(e.target.files?.[0] ?? undefined)}
-        className="sr-only" /* hides it visually but keeps it in the DOM */
+        className="sr-only"
       />
 
       {/* One button only */}
       <button className="btn w-42" onClick={onButtonClick} disabled={busy}>
-        {busy ? 'Uploading…' : file ? `Upload ${file.name}` : 'Upload'}
+        {busy
+          ? t('controls.uploading')
+          : file
+            ? `${t('controls.uploadAlgorithmBtn')} (${file.name})`
+            : t('controls.uploadAlgorithmBtn')}
       </button>
 
       {/* Optional details shown only after a file is chosen */}
       {file && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <div className="label mb-1">Name</div>
+            <div className="label mb-1">{t('controls.name')}</div>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} />
           </div>
           <div>
-            <div className="label mb-1">Entry function</div>
+            <div className="label mb-1">{t('controls.entryFunction')}</div>
             <input className="input w-full" value={entry} onChange={e => setEntry(e.target.value)} />
           </div>
           <div className="text-xs text-zinc-600">
-            <div className="label mb-1">SHA-256</div>
+            <div className="label mb-1">{t('controls.sha256')}</div>
             <div className="font-mono break-all">{hash}</div>
           </div>
         </div>

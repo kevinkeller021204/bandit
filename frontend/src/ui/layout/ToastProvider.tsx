@@ -1,6 +1,7 @@
 // src/layout/ToastProvider.tsx
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
 /**
 * ToastProvider + useToast
@@ -149,6 +150,8 @@ function Toast({
   item: ToastItem;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
+
   const palette: Record<ToastVariant, string> = {
     default: "border-zinc-200 bg-white text-zinc-900",
     success: "border-emerald-300 bg-emerald-50 text-emerald-900",
@@ -168,8 +171,9 @@ function Toast({
         <span className="mt-0.5 text-sm leading-5">{item.message}</span>
         <button
           onClick={onClose}
-          aria-label="Dismiss"
+          aria-label={t('a11y.dismiss')}
           className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded hover:bg-black/5"
+          title={t('a11y.dismiss')}
         >
           ✕
         </button>
