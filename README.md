@@ -38,7 +38,7 @@ do not commit changes with IS_DEV = 1
 2. npm run build # (/frontend)
 3. npm run build # (/frontend)
 4. npm run dev # (/frontend)
-5. python(3) app.py [//]: # (in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
+5. python(3) app.py # (/backend, in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
 
 
 Have fun!
