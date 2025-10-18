@@ -1,4 +1,24 @@
-# bandit
+# 🍕 Bandit App — Interactive Multi-Armed Bandit “Pizzeria” Simulator
+
+**Bandit** is an interactive desktop application for experimenting with **multi-armed bandit algorithms** in a playful *pizza-topping* scenario.
+
+Each “arm” represents a **topping option**, and each “customer” simulates a recommendation or decision step.  
+You can observe how different algorithms balance **exploration vs. exploitation** while optimizing which toppings to suggest over time.
+
+---
+
+## ✨ Features
+
+- 🧩 Test built-in algorithms such as **Greedy**, **ε-Greedy**, **UCB1**, and **Thompson Sampling**  
+- 🧠 **Upload your own Python algorithms** (`.py`) and run them instantly  
+- 📊 Visualize rewards, acceptance rates, and learning curves in real time  
+- 🎲 Use an optional random seed for reproducible runs — or leave it blank for randomness  
+- 🔌 Runs completely **offline** using  
+  - **Electron** (frontend & visualization)  
+  - **Python Quart** (backend computation)  
+
+---
+
 Download Links:
 <!-- DOWNLOADS:START -->
 ### 📥 Downloads (always latest)
