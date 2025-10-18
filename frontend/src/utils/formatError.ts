@@ -2,6 +2,12 @@
 import { ApiError } from "@/api/http";
 import i18n from "@/i18n"; // <-- import your initialized i18n instance
 
+/** Untyped i18n helper for runtime keys (avoids TS union errors). */
+function ti(key: string, defaultValue = ""): string {
+    // Casting to any sidesteps the typed TFuncKey union, which doesn't allow dynamic keys.
+    return i18n.t(key as any, { defaultValue }) as string;
+}
+
 /**
  * Map a pydantic-like `loc` (string or string[]) to a readable, translated label.
  * Examples:
@@ -13,7 +19,7 @@ function labelFor(loc: unknown): string {
     const key = path[0] ?? "";
 
     // Try translated field label; fall back to the raw path joined with arrows, else "Field"
-    const translated = key ? i18n.t(`fields.${key}`) : "";
+    const translated = key ? ti(`fields.${key}`, "") : "";
     const joinedPath = path.length ? path.join(" → ") : "Field";
     return translated && translated !== `fields.${key}` ? translated : joinedPath;
 }
