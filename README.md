@@ -43,6 +43,10 @@ do not commit changes with IS_DEV = 1
 7. python(3) app.py
 (Step 7: in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
 
+### How to run tests
+1. go into root dir (/bandit)
+2. python run_tests.py
+2. python3 run_tests.py (if mac)
 
 Have fun!
 
