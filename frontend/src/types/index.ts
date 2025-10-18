@@ -60,13 +60,15 @@ export type UploadAlgorithmMeta = {
   sha256: string;
 };
 
-// ---------- Play (manual session) ----------
+// ---------- Play ----------
 export interface PlayStartRequest {
   env: EnvType;
   n_actions: number;
   iterations: number;
+  algorithms: string[];
   seed?: number;
 }
+
 export interface PlayStartResponse {
   session_id: string;
   env: EnvInfo;

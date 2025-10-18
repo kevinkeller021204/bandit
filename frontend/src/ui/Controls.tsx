@@ -4,6 +4,8 @@ import { listAlgorithms, playStart } from '@/api'
 import CustomAlgoUpload from './CustomAlgoUpload'
 import { NumberStepper } from './NumberStepper'
 import { SegmentedToggle } from './SegmentedToggle'
+import { useToast } from './ToastProvider'
+import { formatError } from '@/utils/formatError'
 
 const ALL_ALGOS = [
   { key: 'greedy', label: 'Greedy (min)' },
@@ -63,7 +65,7 @@ export function Controls({
   const [iterations, setIterations] = useState(50)
   const [seed, setSeed] = useState<number>()
   const [openInfo, setOpenInfo] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const { error, success } = useToast();
 
   // built-ins
   const [algos, setAlgos] = useState<string[]>(['greedy', 'epsilon_greedy'])
@@ -98,13 +100,23 @@ export function Controls({
 
   async function onPlay() {
     const cfg = buildRunConfig()
-    const s = await playStart({ env: cfg.env, n_actions: cfg.n_actions, iterations: cfg.iterations, seed: cfg.seed })
-    setSessionId(s.session_id)
-    onPlayStarted?.({
-      algorithms: algos,
-      n_actions: nActions,
-      data: s
-    })
+    try {
+      const s = await playStart({
+        env: cfg.env,
+        n_actions: cfg.n_actions,
+        iterations: cfg.iterations,
+        seed: cfg.seed,
+        algorithms: algos
+      })
+      onPlayStarted?.({
+        algorithms: algos,
+        n_actions: nActions,
+        data: s
+      })
+    }
+    catch (e: any) {
+      error(formatError(e));
+    }
   }
 
   function toggleInfo(key: string) {
@@ -154,7 +166,7 @@ export function Controls({
             id="toppings"
             value={nActions}
             onChange={setNActions}
-            min={0}
+            min={2}
             max={100}
             step={1}
           />
@@ -186,7 +198,10 @@ export function Controls({
 
       {/* One unified list */}
       <div>
-        <div className="label mb-2">Algorithmen</div>
+        <div className="label mb-2">
+          Algorithmen{" "}
+          <span className="text-red-600" aria-hidden="true">*</span>
+        </div>
         <div className="grid grid-cols-2 gap-2 items-start">
           {/* built-ins */}
           {ALL_ALGOS.map(a => (

@@ -25,7 +25,7 @@ function serializeSvg(svg: SVGSVGElement): string {
   return new XMLSerializer().serializeToString(clone);
 }
 
-export async function exportNodeAsPNG(node: HTMLElement, opts: PngExportOptions = {}) {
+export async function ExportNodeAsPNG(node: HTMLElement, opts: PngExportOptions = {}) {
   const {
     width,
     height,

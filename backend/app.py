@@ -2,7 +2,7 @@ from __future__ import annotations
 import random
 import uuid
 from dataclasses import dataclass
-from typing import List, Dict, Literal, Optional
+from typing import List, Dict, Literal, Optional, Annotated
 import math
 import sys
 from quart import Quart, jsonify, request, send_from_directory, redirect
@@ -235,14 +235,15 @@ class RunRequest(BaseModel):
     env: EnvType
     n_actions: int = Field(ge=2, le=100)
     iterations: int = Field(ge=1, le=50_000)
-    algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"])
+    algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"], min_items=1)
     seed: Optional[int] = None
     custom_algorithms: Optional[List[str]] = None
 
 class PlayStartReq(BaseModel):
     env: EnvType
     n_actions: int = Field(ge=2, le=100)
-    iterations: int = Field(ge=1, le=50_000)
+    iterations: int = Field(ge=1, le=10_000)
+    algorithms: List[str] = Field(default_factory=lambda: ["greedy", "epsilon_greedy"], min_items=1)
     seed: Optional[int] = None
 
 class PlayStepReq(BaseModel):
