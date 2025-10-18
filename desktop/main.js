@@ -274,8 +274,15 @@ async function ensureBundle() {
           try { child_process.execSync(`xattr -dr com.apple.quarantine "${bin}"`); } catch {}
         }
       }
+
     } catch {}
   }
+
+    if (rel && rel.tag_name) {
+      console.log(`Verwendeter Release: ${rel.tag_name}`);
+      emit('release-tag', rel.tag_name);
+    }
+
 
   return dir; // gültiger Pfad oder null
 }
