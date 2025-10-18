@@ -192,17 +192,71 @@ function binPath(dir) {
 
 async function ensureBundle() {
   status("Prüfe neuestes Release …");
-  const rel = await latestReleasePublic();
+
+  async function hasInternet(timeoutMs = 2500) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const r = await fetch("https://api.github.com/", { method: "HEAD", signal: ctrl.signal });
+      clearTimeout(t);
+      return r.ok;
+    } catch { return false; }
+  }
+
+  let rel = null;
+  const online = await hasInternet();
+
+  if (online) {
+    try {
+      rel = await latestReleasePublic();
+      console.log("Online: Release-Infos von GitHub geladen.");
+    } catch (e) {
+      console.warn("GitHub nicht erreichbar, nutze lokalen Fallback:", e.message);
+    }
+  } else {
+    status("Kein Internet: verwende zuletzt gespeicherten Release (falls vorhanden).");
+  }
+
+  // Fallback auf lokalen Release, wenn keine Release-Infos vorliegen
+  if (!rel) {
+    const bundlesRoot = path.join(APPDATA, "bundles");
+    const localBundles = fs.existsSync(bundlesRoot)
+      ? fs.readdirSync(bundlesRoot)
+          .filter(d => fs.statSync(path.join(bundlesRoot, d)).isDirectory())
+          .sort().reverse()
+      : [];
+
+    if (localBundles.length === 0) {
+      // Nur anzeigen, NICHT werfen
+      status("Kein gespeicherter Release gefunden. Bitte einmal online starten.");
+      emit && emit('info', 'Kein gespeicherter Release gefunden. Bitte einmal online starten.');
+      return null; // <- wichtig: kein Throw
+    }
+
+    const latestTag = localBundles[0];
+    console.log(`Offline-Modus: verwende gespeicherten Release ${latestTag}`);
+    rel = { tag_name: latestTag, assets: [] };
+  }
+
   const tag = rel.tag_name;
   const dir = path.join(APPDATA, "bundles", tag);
 
+  // Wenn das Bundle lokal fehlt und wir offline sind: nur melden, nicht werfen
   if (!fs.existsSync(dir) || !fs.existsSync(binPath(dir))) {
+    if (!online) {
+      status(`Bundle ${tag} nicht vollständig vorhanden. Bitte einmal online verbinden, um es zu laden.`);
+      emit && emit('info', `Bundle ${tag} nicht vollständig vorhanden. Bitte einmal online verbinden.`);
+      return null; // <- kein Throw
+    }
+
+    // online: normal laden/prüfen/entpacken
     const { zipName, sumsName } = namesForPlatform(process.platform);
-    const zipAsset = rel.assets.find(a => a.name === zipName);
-    const sumAsset = rel.assets.find(a => a.name === sumsName);
+    const zipAsset = rel.assets?.find(a => a.name === zipName);
+    const sumAsset = rel.assets?.find(a => a.name === sumsName);
     if (!zipAsset || !sumAsset) {
-      console.log("Available assets:", rel.assets.map(a => a.name));
-      throw new Error(`Release-Assets fehlen: ${zipName} / ${sumsName}`);
+      status(`Release-Assets fehlen (${zipName} / ${sumsName}).`);
+      emit && emit('info', `Release-Assets fehlen (${zipName} / ${sumsName}).`);
+      return null; // <- kein Throw
     }
 
     status("Lade Release …");
@@ -213,17 +267,21 @@ async function ensureBundle() {
     status("Entpacke …");     unzip(zipPath, dir);
 
     try {
-      if (process.platform !== 'win32') {
-        const bin = path.join(dir, 'bandit-server');
+      if (process.platform !== "win32") {
+        const bin = path.join(dir, "bandit-server");
         await fs.promises.chmod(bin, 0o755);
-        if (process.platform === 'darwin') {
+        if (process.platform === "darwin") {
           try { child_process.execSync(`xattr -dr com.apple.quarantine "${bin}"`); } catch {}
         }
       }
     } catch {}
   }
-  return dir;
+
+  return dir; // gültiger Pfad oder null
 }
+
+
+
 
 // ---------- Server ----------
 function stopServer() {
@@ -298,19 +356,25 @@ ipcMain.on('host-offline', async () => {
   await stopNgrokSDK(); 
   try {
     const dir = await ensureBundle();
+    if (!dir) { emit('ui:state', 'idle'); return; }
     startServer(dir);
     await waitReady(`http://127.0.0.1:${PORT}/`);
     const localUrl = `http://127.0.0.1:${PORT}/`;
     status(`Offline bereit: ${localUrl}`);
     emit('open-url', localUrl);
     emit('ui:state', 'offline');
-  } catch (e) { err(e); }
+  } catch (e) { err(e); emit('ui:state', 'idle'); }
 });
 
 ipcMain.on('host-online', async () => {
   await stopNgrokSDK(); 
   try {
     const dir = await ensureBundle();
+    if (!dir) { // <- neu: offline oder kein Bundle -> lokal nicht startbar, UI frei
+      status('Online hosten nur mit Internetverbindung bzw. nach erstem Online-Start möglich.');
+      emit('ui:state', 'idle');
+      return;
+    }
     startServer(dir);
     await waitReady(`http://127.0.0.1:${PORT}/`);
 
@@ -330,7 +394,9 @@ ipcMain.on('host-online', async () => {
     status('Online bereit.');
     emit('ui:state', 'online');
   } catch (e) {
-    console.error('[ngrok]', e);
-    err(e);
+    // ngrok-Fehler o. ä. nur anzeigen, nicht blockieren
+    status('Konnte nicht online hosten. App läuft lokal weiter.');
+    console.error('[host-online]', e);
+    emit('ui:state', 'idle');
   }
 });
