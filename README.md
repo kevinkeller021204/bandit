@@ -28,6 +28,14 @@ If you see “Bandit App is damaged” on first launch:
 6. npm run build
 7. npm start
 
+### Advanced for Development: Start Front- & Backend independently
+(may depend on your installed dependencies)
+Set IS_DEV in app.py to 1 for proxy tunneling
+do not commit changes with IS_DEV = 1
+npm run build //(/frontend)
+npm run dev //(/frontend)
+python(3) app.py //(in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
+
 Have fun!
 
 for urgent pull requests contact kevin.keller@ieee.org, faster response time
