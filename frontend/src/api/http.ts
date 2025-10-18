@@ -1,9 +1,22 @@
+// src/api/http.ts
 
-// Hinweis:
-// Keine harte BASE-URL mehr! Wir rufen relativ zur aktuell geladenen Seite auf.
-// Das funktioniert lokal (127.0.0.1:5050) und über ngrok identisch.
-const API_BASE = ''; // same-origin
+/**
+* API base path. Empty string means "same-origin" relative requests.
+* Keep it blank for environments where the UI is reverse-proxied to the API.
+*/
+const API_BASE = '';
 
+/**
+* ApiError
+* --------
+* Normalized error wrapper for failed fetches with helpful fields.
+* - `status` : HTTP status code
+* - `url` : full request URL
+* - `raw` : response body as text (always captured)
+* - `json` : parsed JSON (if content-type was JSON & parse succeeded)
+*
+* The message prioritizes JSON `{error|message}` or falls back to raw/text.
+*/
 export class ApiError extends Error {
     status: number;
     url: string;
@@ -19,6 +32,16 @@ export class ApiError extends Error {
     }
 }
 
+/**
+* request<T>
+* ----------
+* Fetch helper with:
+* - AbortController timeout (default 30s)
+* - Robust body handling (always reads text, optionally parses JSON)
+* - Consistent ApiError on non-2xx responses
+*
+* Returns parsed JSON when available; otherwise returns the raw text (typed as T).
+*/
 export async function request<T>(path: string, init?: RequestInit, timeoutMs = 30000): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -27,7 +50,7 @@ export async function request<T>(path: string, init?: RequestInit, timeoutMs = 3
     try {
         const res = await fetch(url, { ...init, signal: controller.signal });
 
-        // read text first (robust on errors), then optionally parse JSON
+        // Read text first (robust on errors), then optionally parse JSON
         const raw = await res.text();
         const isJSON = res.headers.get("content-type")?.includes("application/json");
         let parsed: unknown = undefined;
@@ -44,7 +67,7 @@ export async function request<T>(path: string, init?: RequestInit, timeoutMs = 3
             throw new ApiError({ status: res.status, url, raw, json: parsed, message: msg });
         }
 
-        // success path: return parsed JSON if we have it; otherwise cast text to T
+        // Success path: return parsed JSON if we have it; otherwise cast text to T
         return (parsed !== undefined ? (parsed as T) : (raw as unknown as T));
     } finally {
         clearTimeout(timer);

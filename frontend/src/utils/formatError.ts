@@ -1,6 +1,7 @@
 // // src/utils/formatError.ts
 import { ApiError } from "@/api/http";
 
+/** Human-friendly labels for server field names used in error messages. */
 const LABELS: Record<string, string> = {
     env: "Bandit",
     n_actions: "Toppings",
@@ -11,12 +12,27 @@ const LABELS: Record<string, string> = {
     session_id: "Session",
 };
 
+/**
+* Map a pydantic-like `loc` (string or string[]) to a readable label.
+* Examples:
+* - "n_actions" -> "Toppings"
+* - ["body", "env", "type"] -> "body → env → type"
+*/
 function labelFor(loc: unknown): string {
     const path = Array.isArray(loc) ? loc : [loc];
     const key = String(path[0] ?? "");
     return LABELS[key] || (path.filter(Boolean).map(String).join(" → ") || "Field");
 }
 
+/**
+* Convert diverse error shapes into short, helpful messages for toasts/UI.
+*
+* Supports:
+* - ApiError with a pydantic-style body `{ detail: [{loc, msg, type, ctx?}, ...] }`
+* - ApiError with a raw string body
+* - Status-based fallbacks (500/404/400)
+* - Generic Error/unknown
+*/
 export function formatError(err: unknown): string {
     if (err instanceof ApiError) {
         const b: any = err.json;
@@ -27,7 +43,7 @@ export function formatError(err: unknown): string {
                 const where = labelFor(d?.loc);
                 const msg: string = d?.msg || "is invalid";
 
-                // common rewrites
+                // Common rewrites
                 if (d?.type === "value_error.list.min_items" || /min items/i.test(msg)) {
                     return `${where}: please select at least one option.`;
                 }
@@ -43,13 +59,14 @@ export function formatError(err: unknown): string {
                 return `${where}: ${msg}.`;
             });
 
+            // Use list bullets when rendering in a multi-line toast/alert
             return `${lines.join("\n• ")}`;
         }
 
-        // string-only bodies
+        // String-only bodies
         if (typeof err.raw === "string" && err.raw.trim()) return err.raw.trim();
 
-        // status-based fallback
+        // Status-based fallback
         if (err.status >= 500) return "Server error. Please try again in a moment.";
         if (err.status === 404) return "Not found. Please refresh and try again.";
         if (err.status === 400) return "Your input looks invalid. Please review the fields.";

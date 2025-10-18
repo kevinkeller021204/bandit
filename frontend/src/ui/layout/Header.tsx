@@ -1,6 +1,22 @@
-// src/Header.tsx
+// src/layout/Header.tsx
 import { useEffect, useState } from "react";
 import Scrollspy from "react-scrollspy";
+
+/**
+* Header
+* ------
+* Sticky, responsive site header with:
+* - Brand / subtitle
+* - Two-section navigation (Selection / Results) using scrollspy
+* - Mobile-optimized chip nav
+* - Language toggle button
+*
+* Accessibility & UX
+* - Uses <nav aria-label="Primary"> for main navigation landmarks.
+* - Links advertise their active state via aria-current="page".
+* - Header adds a subtle shadow and solid background once the page is scrolled
+* (improves contrast over content).
+*/
 
 type HeaderProps = {
     selectionId: string;
@@ -13,9 +29,12 @@ export default function Header({
     resultsId,
     onTranslate,
 }: HeaderProps) {
+    // Whether the window has scrolled enough to switch header style
     const [scrolled, setScrolled] = useState(false);
+    // Tracks which section is active (from Scrollspy)
     const [active, setActive] = useState<string>(selectionId);
 
+    // Listen for scroll to toggle condensed background/shadow
     useEffect(() => {
         const onScroll = () => setScrolled(window.scrollY > 4);
         onScroll();
@@ -23,6 +42,7 @@ export default function Header({
         return () => window.removeEventListener("scroll", onScroll);
     }, []);
 
+    // Tailwind class presets for tabs
     const baseTab =
         "inline-flex items-center h-9 px-3 rounded-xl text-sm font-medium transition " +
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60";
@@ -56,11 +76,12 @@ export default function Header({
                     className="flex items-center gap-2"
                     aria-label="Primary"
                 >
+                    {/* Desktop tabs: tracked by Scrollspy */}
                     <Scrollspy
                         items={[selectionId, resultsId]}
-                        currentClassName="is-active" 
+                        currentClassName="is-active"
                         onUpdate={(el) => el && setActive(el.id)}
-                        offset={-72} 
+                        offset={-72}
                         componentTag="ul"
                         className="hidden sm:flex items-center gap-2 rounded-xl bg-zinc-100/60 p-1 ring-1 ring-inset ring-zinc-200/60"
                     >
@@ -84,7 +105,7 @@ export default function Header({
                         </li>
                     </Scrollspy>
 
-                    {/* Mobile chips */}
+                    {/* Mobile chips: compact replacements for tabs */}
                     <div className="sm:hidden flex items-center gap-1">
                         <a
                             href={`#${selectionId}`}

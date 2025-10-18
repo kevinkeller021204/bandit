@@ -1,5 +1,17 @@
-// src/components/SegmentedToggle.tsx
-import React, { Dispatch, SetStateAction, useCallback } from "react";
+// src/layout/SegmentedToggle.tsx
+import { Dispatch, SetStateAction, useCallback } from "react";
+
+/**
+* SegmentedToggle
+* ---------------
+* Accessible segmented control built from buttons acting as a radiogroup.
+*
+* Features
+* - Keyboard navigation with ←/→ to move between enabled options
+* - Disabled options are skipped in keyboard cycling
+* - Emits the selected `value` via `onChange`
+* - Size presets (sm, md, lg) adjust height/padding/spacing
+*/
 
 export type ToggleOption = { label: string; value: string; disabled?: boolean };
 
@@ -26,12 +38,14 @@ export function SegmentedToggle<T>({
     size = "md",
     required = true
 }: Props<T>) {
+    // Tailwind size tokens per variant
     const sizes = {
         sm: { h: "h-8", px: "px-3", text: "text-sm", gap: "gap-1", r: "rounded-lg" },
         md: { h: "h-9", px: "px-3.5", text: "text-sm", gap: "gap-1.5", r: "rounded-xl" },
         lg: { h: "h-10", px: "px-4", text: "text-sm", gap: "gap-2", r: "rounded-xl" },
     }[size];
 
+    // Select next enabled option in direction dir (1 forward, -1 backward)
     const selectNext = useCallback(
         (dir: 1 | -1) => {
             const enabled = options.filter(o => !o.disabled);
