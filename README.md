@@ -36,11 +36,12 @@ do not commit changes with IS_DEV = 1
 
 1. Set IS_DEV in app.py to 1 for proxy tunneling
 2. cd frontend
-3. npm run build 
-4. npm run dev
-5. cd ..
-6. cd backend
-7. python(3) app.py
+3. npm i
+4. npm run build 
+5. npm run dev
+6. cd ..
+7. cd backend
+8. python(3) app.py
 (Step 7: in your virtual environment. Must be started and activated, install requirements and all dependencies which may be missing. https://code.visualstudio.com/docs/python/environments)
 
 ### How to run tests
