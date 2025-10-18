@@ -1,4 +1,4 @@
-# 🍕 Bandit App — Interactive Multi-Armed Bandit “Pizzeria” Simulator
+# 🍕 SliceWise — Interactive Multi-Armed Bandit “Pizzeria” Simulator
 
 **SliceWise** is an interactive desktop application for experimenting with **multi-armed bandit algorithms** in a playful *pizza-topping* scenario.
 
